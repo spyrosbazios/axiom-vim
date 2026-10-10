@@ -92,14 +92,14 @@ $('debug').onclick = async () => {
   const res = await ask({ type: 'axs:debug' });
   if (!res) return;
   if (!res.ok || !res.text) return status(res.message || 'Could not collect debug info.');
+  // Always shown too, so it can be copied by hand if the clipboard doesn't take it.
+  $('debugText').hidden = false;
+  $('debugText').value = res.text;
+  $('debugText').select();
   try {
     await navigator.clipboard.writeText(res.text);
-    status('Debug info copied. Paste it to Claude.');
+    status('Debug info copied. Paste it to Claude (or copy it from the box above).');
   } catch {
-    // Clipboard blocked: show it so it can be copied by hand.
-    $('debugText').hidden = false;
-    $('debugText').value = res.text;
-    $('debugText').select();
     status('Copy the text above (Ctrl+C) and paste it to Claude.');
   }
 };

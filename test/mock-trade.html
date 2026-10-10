@@ -12,6 +12,11 @@
   #stats { height: 220px; overflow: auto; flex: none; }
   #feed { flex: 1; overflow: auto; min-height: 0; }
   .feedrow { height: 24px; }
+  /* The Tailwind bits the "/meme/real…" markup needs. */
+  .relative { position: relative; } .absolute { position: absolute; } .contents { display: contents; }
+  .opacity-0 { opacity: 0; } .pointer-events-none { pointer-events: none; }
+  .group:hover .group-hover\:opacity-100 { opacity: 1; } .group:hover .group-hover\:pointer-events-auto { pointer-events: auto; }
+  .h-\[36px\] { height: 36px; } .w-\[36px\] { width: 36px; } .h-\[24px\] { height: 24px; }
 </style></head>
 <body>
 <main>
@@ -55,6 +60,27 @@
     Object.assign(document.querySelector('.tabs').style, { position: 'sticky', top: '0', background: '#111' });
     Object.assign(holders.style, { overflow: 'visible', flex: 'none' });
   }
+  // "/meme/float…": a floating panel of other coins, each with a hide button identical to the token's own.
+  // "/meme/floatclone…": the panel rows even reuse the token header's markup (like a Discover list).
+  if (location.pathname.includes('float')) {
+    const row = location.pathname.includes('clone') ? '<header class="token">' : '<div class="frow" style="display:flex;gap:6px;height:28px">';
+    const coins = [1, 2, 3].map(i => `${row}<span>COIN${i}</span><button class="p-1" aria-label="Hide token" data-coin="${i}"><i class="ri-eye-off-line">h</i></button>${row.startsWith('<header') ? '</header>' : '</div>'}`);
+    document.body.insertAdjacentHTML('beforeend', `<div class="floating" style="position:fixed;right:340px;top:420px;width:200px;background:#222;border:1px solid #555">${coins.join('')}</div>`);
+  }
+  // "/meme/real…": Axiom's real markup (from debug info, 2026-10-11). A bar of token pills at the top, each
+  // with a hover-revealed hide button, and the token's own hide button on its avatar, revealed the same way.
+  // While the avatar is hovered Axiom adds `[&_button]:!…` classes to it, which are gone again afterwards.
+  if (location.pathname.includes('real')) {
+    const reveal = 'absolute -top-[1px] z-[1] flex focus-within:pointer-events-auto focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 pointer-events-none opacity-0';
+    const hideBtn = attrs => `<span class="contents"><button ${attrs} class="flex h-[16px] w-[16px] cursor-pointer items-center justify-center rounded-[4px] border"><i class="ri-eye-off-line text-[12px] leading-none">h</i></button></span>`;
+    const pills = [1, 2, 3, 4, 5, 6].map(i => `<a class="group relative inline-flex h-[24px] items-center px-[8px]" href="/meme/pill${i}"><span class="flex flex-row items-center gap-[4px]"><span class="${reveal} -left-[8px]">${hideBtn(`data-coin="pill${i}"`)}</span>PILL${i}</span></a>`);
+    document.querySelector('main').insertAdjacentHTML('afterbegin', `<span class="flex h-full shrink-0 items-center gap-[1px]" style="height:28px">${pills.join('')}</span>`);
+    tradeHide.outerHTML = `<div class="group relative h-[36px] w-[36px] items-center justify-center" style="background:#335"><span class="${reveal}">${hideBtn('id="tradeHide"')}</span></div>`;
+    const avatar = document.getElementById('tradeHide').closest('div.group');
+    const hoverClasses = ['[&_button]:!pointer-events-auto', '[&_button]:!opacity-100'];
+    avatar.addEventListener('mouseenter', () => avatar.classList.add(...hoverClasses));
+    avatar.addEventListener('mouseleave', () => avatar.classList.remove(...hoverClasses));
+  }
   for (let i = 1; i <= 40; i++) wallets.insertAdjacentHTML('beforeend', `<div style="height:28px">tracked ${i}</div>`);
   const H = document.getElementById('holders');
   for (let i = 1; i <= 250; i++) H.insertAdjacentHTML('beforeend', `<div class="row">wallet ${i}</div>`);
@@ -76,6 +102,7 @@
   });
   document.addEventListener('click', e => {
     if (e.target.closest('#tradeHide')) log.push('trade-hide');
+    if (e.target.closest('[data-coin]')) log.push('panel-hide:' + e.target.closest('[data-coin]').dataset.coin);
     if (e.target.closest('.balance-eye')) log.push('balance');
     if (e.target.closest('#blacklist')) log.push('blacklist');
   });

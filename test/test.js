@@ -731,6 +731,67 @@ const check = (name, ok, extra = '') => {
     check('opened directly (no earlier Axiom page): goes to Pulse instead of leaving', await atUrl('/pulse', ''), await page.evaluate(() => location.href).catch(() => '?'));
     await store({ pairHideSelector: '' });
 
+    section('— trade page: hide button repeated in a floating panel');
+    await openPage();
+    await page.goto('https://axiom.trade/meme/TEST4', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await teach('pairHide'); await page.bringToFront(); await sleep(100);
+    await page.click('#tradeHide i'); await sleep(200);
+    const plainSel = await storeGet('pairHideSelector');
+    await page.goto('https://axiom.trade/meme/float1', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await clearLog(); await hideKey(); await sleep(400);
+    l = await log();
+    check('taught without the panel: once it shows, Shift+X clicks nothing and says to teach with it open', !l.some(x => /hide/.test(x)) && /Teach it again while the panel is open/.test(await toast()), `${JSON.stringify(l)} ${await toast()}`);
+    await teach('pairHide'); await page.bringToFront(); await sleep(100);
+    await clearLog(); await page.click('#tradeHide i'); await sleep(200);
+    const floatSel = await storeGet('pairHideSelector');
+    check('Teach with the panel open learns the token\'s own button (click swallowed)', !!floatSel && floatSel !== plainSel && /Learned/.test(await toast()) && !(await log()).length, `${floatSel} | ${await toast()}`);
+    await clearLog(); await hideKey(); await sleep(20);
+    l = await log();
+    check('...then Shift+X clicks the token\'s hide button, not a panel coin\'s', l.includes('trade-hide') && !l.some(x => x.startsWith('panel-hide')), JSON.stringify(l));
+    check('...and goes back', await atUrl('/meme/TEST4', ''), await page.evaluate(() => location.href).catch(() => '?'));
+    await page.goto('https://axiom.trade/meme/TEST5', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await clearLog(); await hideKey(); await sleep(20);
+    check('...and still works on a trade page without the panel', (await log()).includes('trade-hide'), JSON.stringify(await log()));
+    await page.goto('https://axiom.trade/meme/floatclone', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await teach('pairHide'); await page.bringToFront(); await sleep(100);
+    await page.click('#tradeHide i'); await sleep(200);
+    const cloneSel = await storeGet('pairHideSelector');
+    check('panel rows reuse the header markup: Teach still singles out the token\'s button', /Learned/.test(await toast()) && cloneSel !== floatSel, `${cloneSel} | ${await toast()}`);
+    await clearLog(); await hideKey(); await sleep(20);
+    l = await log();
+    check('...and Shift+X clicks it, not a panel coin\'s', l.includes('trade-hide') && !l.some(x => x.startsWith('panel-hide')), JSON.stringify(l));
+    await page.goto('https://axiom.trade/meme/floatclone2', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    // A box around the button changes after Teach (e.g. a hover class): the taught selector finds nothing.
+    await page.evaluate(() => document.querySelector('main > header.token').classList.replace('token', 'token-x'));
+    await hideKey(); await sleep(100);
+    dbg = await debugInfo();
+    const chains = dbg.pairHideChains || [];
+    check('debug info: taught selector finds nothing, shows the last message and its last part\'s full chains', dbg.pairHideMatches === 0 && /isn't on this page/.test(dbg.lastMessage) && dbg.pairHideShowing === 'its last part: i.ri-eye-off-line' && chains.some(m => m.chain.some(c => /header\.token-x/.test(c))), JSON.stringify({ last: dbg.lastMessage, showing: dbg.pairHideShowing, chains }));
+    await store({ pairHideSelector: '[aria-label="Hide token"]' }); await sleep(100);
+    dbg = await debugInfo();
+    check('debug info shows where the hide button copies meet, flagging the floating panel', dbg.pairHideMatches === 4 && /^body/.test(dbg.pairHideMeet) && dbg.pairHideChains.some(m => m.chain.some(c => /pos=fixed/.test(c))), JSON.stringify({ meet: dbg.pairHideMeet, chains: dbg.pairHideChains }));
+    await store({ pairHideSelector: '' });
+
+    section('— trade page: real Axiom markup (pill bar, hover-only classes on the avatar)');
+    await openPage();
+    await page.goto('https://axiom.trade/meme/TEST6', { waitUntil: 'domcontentloaded' }); await sleep(400);
+    await page.goto('https://axiom.trade/meme/real1', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await teach('pairHide'); await page.bringToFront(); await sleep(100);
+    await clearLog(); await page.click('#tradeHide i'); await sleep(200);
+    const realSel = await storeGet('pairHideSelector');
+    check('Teach learns the avatar\'s hide button, leaving out its hover-only classes', /Learned/.test(await toast()) && !!realSel && !/[!&]/.test(realSel) && !(await log()).length, `${realSel} | ${await toast()}`);
+    await page.mouse.move(700, 700); await sleep(100);
+    check('...(those classes are gone once the mouse leaves)', await page.evaluate(() => !document.getElementById('tradeHide').closest('div.group').className.includes('!')));
+    await clearLog(); await hideKey(); await sleep(20);
+    l = await log();
+    check('...and with the mouse elsewhere, Shift+X clicks it, not a pill\'s', l.includes('trade-hide') && !l.some(x => x.startsWith('panel-hide')), JSON.stringify(l));
+    check('...and goes back', await atUrl('/meme/TEST6', ''), await page.evaluate(() => location.href).catch(() => '?'));
+    await page.goto('https://axiom.trade/meme/real2', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await store({ pairHideSelector: 'div.gone i.ri-eye-off-line' }); await sleep(100);
+    dbg = await debugInfo();
+    check('debug info lists look-alike buttons once, with a count (the pills), and the avatar\'s separately', dbg.pairHideMatches === 0 && dbg.pairHideChains.some(g => g.count === 6) && dbg.pairHideChains.some(g => g.count === 1 && g.chain.some(c => c.includes('h-[36px]'))), JSON.stringify(dbg.pairHideChains.map(g => ({ count: g.count, chain: g.chain.slice(0, 5) }))));
+    await store({ pairHideSelector: '' });
+
     section('— no Pulse columns');
     await load();
     await page.evaluate(() => {

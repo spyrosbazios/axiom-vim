@@ -29,6 +29,7 @@
   let pairHidePending = false; // a hide / blacklist is leaving the trade page: ignore repeat presses
   let toastEl = null;
   let toastTimer = 0;
+  let lastToast = ''; // for debug info
   const watchedDocs = new WeakSet();
 
   // --- Setup --------------------------------------------------------------------------
@@ -677,7 +678,11 @@
     const shown = matches.filter(el => el.getClientRects().length);
     const pick = shown.length ? shown : matches;
     if (pick.length === 1) return { el: pick[0] };
-    return { error: pick.length ? `More than one button matches the taught ${name} button here. Teach it again.` : `The ${name} button isn't on this page.` };
+    return {
+      error: pick.length
+        ? `The taught ${name} button matches ${pick.length} buttons here (a floating panel?). Teach it again while the panel is open.`
+        : `The ${name} button isn't on this page.`
+    };
   }
 
   // Back to where the token was opened from; to Pulse if there's no earlier Axiom page
@@ -1147,11 +1152,57 @@
   }
 
   // The first candidate that matches exactly one thing on the page, and that thing is `el` (or is inside it / wraps it).
+  // If none does (e.g. a bar of other tokens or a floating panel repeats the same button), the first one
+  // narrowed down to a box around `el`, nearest box first: the box by name, else the exact chain of
+  // boxes from it down to `el` (panel rows can reuse the token header's own markup).
   function uniqueSelector(candidates, el) {
-    return candidates.find(c => {
+    const unique = c => {
+      if (c.length > MAX_SELECTOR) return false;
       const m = outermost([...queryAll(c)]);
       return m.length === 1 && (m[0] === el || el.contains(m[0]) || m[0].contains(el));
-    }) || '';
+    };
+    const plain = candidates.find(unique);
+    if (plain) return plain;
+    let path = '';
+    for (let n = el.parentElement, depth = 0; n && n !== document.body; n = n.parentElement, depth++) {
+      path = path ? `${stableClassSelector(n)} > ${path}` : stableClassSelector(n);
+      // Single classes only on the nearest boxes: there are many, and each costs a page-wide query.
+      for (const scope of new Set([...scopeSelectors(n, depth < 8), path])) {
+        const sel = candidates.map(c => `${scope} ${c}`).find(unique);
+        if (sel) return sel;
+      }
+    }
+    return '';
+  }
+
+  // Taught selectors live in chrome.storage.sync, which refuses items over 8 KB.
+  const MAX_SELECTOR = 2000;
+
+  // Ways to name a box around a control: a hand-written id, a test name, one of its stable classes
+  // (rarest on the page first), all of them. Not labels or titles: around the token those often hold its name.
+  function scopeSelectors(el, singles) {
+    const tag = el.tagName.toLowerCase();
+    const out = [];
+    if (el.id && !/[:\d]/.test(el.id)) out.push(`#${CSS.escape(el.id)}`);
+    const testId = el.getAttribute('data-testid');
+    if (testId) out.push(`[data-testid="${CSS.escape(testId)}"]`);
+    const classes = stableClasses(el);
+    if (singles) {
+      const count = new Map(classes.map(c => [c, document.getElementsByClassName(c).length]));
+      out.push(...[...classes].sort((a, b) => count.get(a) - count.get(b)).map(c => `${tag}.${CSS.escape(c)}`));
+    }
+    if (classes.length) out.push(stableClassSelector(el));
+    return out;
+  }
+
+  // Classes with a variant or ! (e.g. Axiom's `[&_button]:!opacity-100`) are often switched on and off
+  // with the page's state, such as while the box is hovered, so a selector using them stops matching.
+  function stableClasses(el) {
+    return [...el.classList].filter(c => !/[:!]/.test(c));
+  }
+
+  function stableClassSelector(el) {
+    return el.tagName.toLowerCase() + stableClasses(el).map(c => '.' + CSS.escape(c)).join('');
   }
 
   // The list row (coin card) around `el`: about as wide as its list, with at least two look-alike siblings.
@@ -1230,19 +1281,29 @@
 
   function debugInfo() {
     const mask = v => String(v).replace(/[1-9A-HJ-NP-Za-km-z]{32,44}/g, '<addr>').slice(0, 80);
-    const desc = el => {
-      const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/).slice(0, 5).join('.') : '';
+    // allClasses: every class, to compare with a taught selector (which uses them all).
+    const desc = (el, allClasses = false) => {
+      const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/).slice(0, allClasses ? 40 : 5).join('.') : '';
       const attrs = ['id', 'role', 'aria-selected', 'data-state']
         .filter(a => el.hasAttribute(a)).map(a => `${a}=${mask(el.getAttribute(a))}`).join(' ');
-      return `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''}${attrs ? ` [${attrs}]` : ''} text:${el.textContent.length}`;
+      const pos = getComputedStyle(el).position; // fixed / absolute: a floating panel
+      return `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''}${attrs ? ` [${attrs}]` : ''}${/fixed|absolute/.test(pos) ? ` pos=${pos}` : ''} text:${el.textContent.length}`;
     };
-    const chain = el => {
+    const chain = (el, stop = document.body, max = 12, allClasses = false) => {
       const out = [];
-      for (let n = el, i = 0; n && n !== document.body && i < 12; n = n.parentElement, i++) out.push(desc(n));
+      for (let n = el, i = 0; n && n !== stop && n !== document.body && i < max; n = n.parentElement, i++) out.push(desc(n, allClasses));
       return out;
     };
-    const info = { version: chrome.runtime.getManifest().version, page: mask(location.pathname), settings };
-    if (onPulse()) {
+    const info = { version: chrome.runtime.getManifest().version, page: mask(location.pathname), lastMessage: lastToast, settings, errors: [] };
+    // A part that fails is noted (with where it failed) instead of losing the rest.
+    const part = (name, fn) => {
+      try {
+        fn();
+      } catch (err) {
+        info.errors.push(`${name}: ${err.message} @ ${(err.stack || '').split('\n')[1]?.trim() || '?'}`);
+      }
+    };
+    if (onPulse()) part('pulse', () => {
       const model = scanCards();
       const controls = [...queryAll(settings.hideSelector || AXS_AUTO_HIDE_SELECTORS.join(','))];
       info.pulse = {
@@ -1252,24 +1313,52 @@
           controlsInside: controls.filter(c => h.card.contains(c)).length
         }))
       };
-    }
+    });
     if (onPairPage()) {
-      info.tabBar = taughtTabBar() ? desc(taughtTabBar()) : 'not taught';
-      info.holdersText = textElements(/holders/i).slice(0, 6).map(el => ({ text: mask(el.textContent.trim()), tabScore: tabBarScore(el), chain: chain(el) }));
-      forgetHolders();
-      const list = holdersList();
-      info.holdersList = list ? desc(list.list) : null;
-      info.scrollers = [...document.querySelectorAll('*')].filter(canScrollY).slice(0, 15)
-        .map(el => ({ el: desc(el), h: el.clientHeight, scrollH: el.scrollHeight }));
-      info.chart = {
-        iframes: [...document.querySelectorAll('iframe')].map(f => {
-          let sameOrigin = false;
-          try { sameOrigin = !!f.contentDocument; } catch {}
-          return { src: mask((f.getAttribute('src') || '').split('?')[0]), sameOrigin };
-        }),
-        paneFound: !!chartPane()
-      };
-      info.linkHostsOnScreen = [...new Set([...document.querySelectorAll('a[href]')].filter(inViewport).map(a => a.hostname))].slice(0, 25);
+      part('hide button', () => {
+        // The taught hide button's matches, each up to where they all meet: shows how a floating panel's
+        // copies differ from the token's own. If it matches nothing, what its last part (the button or
+        // icon itself) matches, with every class up the page: shows which box changed since Teach.
+        // Look-alikes (e.g. a bar of token pills) are listed once, with a count.
+        const taught = outermost([...queryAll(settings.pairHideSelector)]);
+        const last = settings.pairHideSelector.match(/(?:\\.|[^\s\\>])+$/)?.[0];
+        const hides = (taught.length ? taught : outermost([...queryAll(last || AXS_AUTO_HIDE_SELECTORS.join(','))])).slice(0, 300);
+        let meet = hides[0]?.parentElement;
+        while (meet && !hides.every(el => meet.contains(el))) meet = meet.parentElement;
+        info.pairHideMatches = taught.length;
+        info.pairHideShowing = taught.length ? 'taught selector' : last ? `its last part: ${last}` : 'eye-like buttons';
+        info.pairHideMeet = meet ? desc(meet) : null;
+        const groups = new Map();
+        for (const el of hides) {
+          const lines = chain(el, hides.length > 1 ? meet : null, 30, !taught.length);
+          const key = lines.map(line => line.replace(/ text:\d+$/, '')).join('<');
+          if (groups.has(key)) groups.get(key).count++;
+          else groups.set(key, { count: 1, shown: el.getClientRects().length > 0, chain: lines });
+        }
+        info.pairHideChains = [...groups.values()].slice(0, 8);
+      });
+      part('holders', () => {
+        info.tabBar = taughtTabBar() ? desc(taughtTabBar()) : 'not taught';
+        info.holdersText = textElements(/holders/i).slice(0, 6).map(el => ({ text: mask(el.textContent.trim()), tabScore: tabBarScore(el), chain: chain(el) }));
+        forgetHolders();
+        const list = holdersList();
+        info.holdersList = list ? desc(list.list) : null;
+        info.scrollers = [...document.querySelectorAll('*')].filter(canScrollY).slice(0, 15)
+          .map(el => ({ el: desc(el), h: el.clientHeight, scrollH: el.scrollHeight }));
+      });
+      part('chart', () => {
+        info.chart = {
+          iframes: [...document.querySelectorAll('iframe')].map(f => {
+            let sameOrigin = false;
+            try { sameOrigin = !!f.contentDocument; } catch {}
+            return { src: mask((f.getAttribute('src') || '').split('?')[0]), sameOrigin };
+          }),
+          paneFound: !!chartPane()
+        };
+      });
+      part('links', () => {
+        info.linkHostsOnScreen = [...new Set([...document.querySelectorAll('a[href]')].filter(inViewport).map(a => a.hostname))].slice(0, 25);
+      });
     }
     return JSON.stringify(info, null, 1);
   }
@@ -1344,6 +1433,7 @@
       ].join(';');
       document.documentElement.appendChild(toastEl);
     }
+    lastToast = text;
     toastEl.textContent = `Axiom Vim: ${text}`;
     toastEl.style.display = 'block';
     clearTimeout(toastTimer);

@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock trade page</title>
+<style>
+  body { margin: 0; font: 14px sans-serif; background: #111; color: #eee; display: flex; height: 100vh; overflow: hidden; }
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chart { height: 380px; flex: none; background: #181818; }
+  .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .tabs { display: flex; gap: 8px; padding: 6px; flex: none; }
+  #holders, .holders-x { flex: 1; overflow: auto; min-height: 0; }
+  .row { height: 32px; display: flex; align-items: center; padding: 0 8px; border-bottom: 1px solid #222; box-sizing: border-box; }
+  aside { width: 320px; display: flex; flex-direction: column; border-left: 1px solid #333; }
+  #stats { height: 220px; overflow: auto; flex: none; }
+  #feed { flex: 1; overflow: auto; min-height: 0; }
+  .feedrow { height: 24px; }
+</style></head>
+<body>
+<main>
+  <header class="token" style="height:40px;display:flex;align-items:center;gap:10px;padding:0 8px">
+    <a href="https://pump.fun/coin/TOKENCA">pump</a>
+    <a href="https://solscan.io/account/DEVWALLET">dev</a>
+    <a data-tw="search" href="https://x.com/search?q=TOKENCA">search on X</a>
+    <span>TOKEN</span>
+    <a data-tw="token" href="https://x.com/i/communities/123"><svg width="14" height="14"><path d="M1 1L13 13M13 1L1 13"/></svg></a>
+    <a id="site" href="https://tokenproject.invalid/" target="_blank" aria-label="Website"><svg width="14" height="14"><circle cx="7" cy="7" r="6"/></svg></a>
+    <a id="docs" href="https://docs.tokenproject.invalid/">docs</a>
+    <button id="tradeHide" class="p-1" aria-label="Hide token"><i class="ri-eye-off-line">h</i></button>
+    <button id="blacklist" class="p-1 rounded">Blacklist dev</button>
+  </header>
+  <iframe class="chart" id="chartFrame" style="border:0;width:100%;display:block"></iframe>
+  <div class="panel" id="panel">
+    <div class="tabs"><button role="tab" aria-selected="false" id="tradesTab">Trades</button><button role="tab" aria-selected="false">Positions</button><button role="tab" aria-selected="false">Orders</button><button role="tab" aria-selected="true" id="holdersTab">Holders (250)</button><button role="tab" aria-selected="false">Top Traders</button><button role="tab" aria-selected="false">Dev Tokens</button></div>
+    <div id="holders"></div>
+  </div>
+</main>
+<aside>
+  <div>Balance 1.2 SOL <button class="balance-eye"><i class="ri-eye-off-line">b</i></button></div>
+  <input id="amount" placeholder="Amount (SOL)">
+  <div id="stats"><div>Top 10 H. 12%</div><div><span>Holders</span> <span>1.2K</span></div><div style="height:600px">more stats</div></div>
+  <div id="wallets" style="height:180px;overflow:auto;flex:none;border-top:1px solid #333"><div>Tracked Wallets</div></div>
+  <div id="feed"></div>
+</aside>
+<script>
+  window.log = [];
+  // "/meme/deepN…": every tab label nested N spans deep.
+  const depth = Number((/deep(\d+)/.exec(location.pathname) || [])[1] || 0);
+  document.querySelectorAll('[role=tab]').forEach(t => {
+    for (let i = 0; i < depth; i++) t.innerHTML = `<span>${t.innerHTML}</span>`;
+  });
+  // "/meme/blicon…": the Blacklist dev button is an icon only (needs Teach).
+  if (location.pathname.includes('blicon')) blacklist.innerHTML = '<i class="ri-user-forbid-line">⊘</i>';
+  chartFrame.src = '/charting_library/sameorigin.html' + (location.pathname.includes('controls') ? '?controls' : '');
+  // "/meme/sticky…": the whole bottom panel scrolls and the tab bar sticks to its top.
+  if (location.pathname.includes('sticky')) {
+    Object.assign(panel.style, { display: 'block', overflowY: 'auto' });
+    Object.assign(document.querySelector('.tabs').style, { position: 'sticky', top: '0', background: '#111' });
+    Object.assign(holders.style, { overflow: 'visible', flex: 'none' });
+  }
+  for (let i = 1; i <= 40; i++) wallets.insertAdjacentHTML('beforeend', `<div style="height:28px">tracked ${i}</div>`);
+  const H = document.getElementById('holders');
+  for (let i = 1; i <= 250; i++) H.insertAdjacentHTML('beforeend', `<div class="row">wallet ${i}</div>`);
+  // "/meme/hodl…": tab label auto-detect can't recognize, list has only utility classes (needs Teach).
+  if (location.pathname.includes('hodl')) {
+    holdersTab.textContent = 'Hodlers (250)';
+    H.removeAttribute('id');
+    H.className = 'flex-1 overflow-auto holders-x';
+  }
+  for (let i = 1; i <= 100; i++) feed.insertAdjacentHTML('beforeend', `<div class="feedrow">trade ${i}</div>`);
+  feed.insertAdjacentHTML('afterbegin', '<div class="feedrow"><a data-tw="feed" href="https://x.com/someone">@someone</a></div>');
+  document.addEventListener('keydown', e => log.push('pagekey:' + e.key));
+  // Radix-style tabs: switch on mousedown
+  document.addEventListener('mousedown', e => {
+    const t = e.target.closest('[role=tab]');
+    if (!t) return;
+    document.querySelectorAll('[role=tab]').forEach(x => x.setAttribute('aria-selected', String(x === t)));
+    log.push('tab:' + t.textContent.replace(/\s*\(.*\)$/, ''));
+  });
+  document.addEventListener('click', e => {
+    if (e.target.closest('#tradeHide')) log.push('trade-hide');
+    if (e.target.closest('.balance-eye')) log.push('balance');
+    if (e.target.closest('#blacklist')) log.push('blacklist');
+  });
+  // Axiom-like X preview: shows 200ms after hovering an X link, closes when the pointer leaves it.
+  const preview = document.createElement('div');
+  preview.hidden = true;
+  preview.style.cssText = 'position:fixed;top:44px;left:120px;padding:8px;background:#223;border:1px solid #445';
+  document.body.appendChild(preview);
+  let timer = 0;
+  const xLink = el => el.closest?.('a[href*="x.com"]');
+  document.addEventListener('mouseover', e => {
+    const a = xLink(e.target);
+    if (!a || (e.relatedTarget && a.contains(e.relatedTarget))) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => { preview.hidden = false; preview.textContent = 'preview ' + a.dataset.tw; log.push('preview:open:' + a.dataset.tw); }, 200);
+  });
+  document.addEventListener('mouseout', e => {
+    const a = xLink(e.target);
+    if (!a || (e.relatedTarget && a.contains(e.relatedTarget))) return;
+    clearTimeout(timer);
+    if (!preview.hidden) { preview.hidden = true; log.push('preview:close'); }
+  });
+</script>
+</body></html>

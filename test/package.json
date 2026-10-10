@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "scripts": { "test": "node test.js" },
+  "devDependencies": { "puppeteer-core": "^24" }
+}

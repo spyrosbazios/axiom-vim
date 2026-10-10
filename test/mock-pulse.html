@@ -1,0 +1,109 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock Pulse</title>
+<style>
+  body { margin: 0; font: 14px sans-serif; background: #111; color: #eee; }
+  .cols { display: flex; gap: 8px; height: calc(100vh - 30px); }
+  .col { flex: 1; display: flex; flex-direction: column; border: 1px solid #333; min-height: 0; }
+  .col header { height: 40px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px; }
+  .list { flex: 1; overflow-y: auto; min-height: 0; }
+  .card { position: relative; height: 110px; margin: 6px; padding: 8px; background: #1c1c1c; cursor: pointer; }
+  .card .hide { visibility: hidden; position: absolute; top: 8px; right: 8px; }
+  .card:hover .hide { visibility: visible; }
+  .card .name { display: inline-block; }
+  .copy { margin-left: 8px; }
+</style></head>
+<body>
+<input id="search" placeholder="search" style="height:24px"> <a id="next" href="/pulse?page=2" style="color:#9cf">next page</a>
+<div class="cols">
+  <div class="col"><header>New Pairs <button title="Hide filters" id="hdrA">filters</button></header><div class="list" id="A"></div></div>
+  <div class="col"><header>Final Stretch</header><div class="list" id="B"></div></div>
+  <div class="col"><header>Migrated</header><div class="list" id="C"></div></div>
+  <aside id="W" style="width:220px;flex:none;border:1px solid #333;overflow:auto"><header style="height:40px">Watchlist</header></aside>
+</div>
+<script>
+  window.log = [];
+  console.log('[page] load', location.search, performance.getEntriesByType('navigation')[0]?.type);
+  // A: Remix-icon hide button (auto-detectable)
+  for (let i = 1; i <= 4; i++) {
+    A.insertAdjacentHTML('beforeend',
+      `<div class="card" data-id="A${i}"><div><img width="40" height="40"><span class="name"><span>TOKEN A${i}</span></span>
+       <button class="copy"><i class="ri-file-copy-line"></i></button> <a class="social" href="https://x.com/tokenA${i}">X</a>
+       <a class="site" href="https://sitea${i}.invalid/"><i class="ri-global-line"></i></a></div>
+       <div class="metrics">MC $12K · V $3K</div>
+       <span class="devmig" data-state="closed" style="position:absolute;left:30%;right:30%;top:40%;height:34px;background:#2a2a3a">DS 2/5</span>
+       <button class="buy" style="position:absolute;${i === 3 ? 'left:0;right:0;top:45%;height:24px' : 'bottom:8px;right:8px'}">Buy</button>
+       <button class="hide p-1 rounded"><i class="ri-eye-off-line"></i></button></div>`);
+  }
+  // B: same icon, extra wrapper per row, long list that scrolls
+  for (let i = 1; i <= 10; i++) {
+    B.insertAdjacentHTML('beforeend',
+      `<div class="row-wrap"><div class="card" data-id="B${i}"><a class="tokenlink" href="/meme/B${i}"><span class="name">TOKEN B${i}</span></a>
+       <span class="hide"><i class="ri-eye-off-line text-sm"></i></span></div></div>`);
+  }
+  // C: unlabeled SVG-only hide button (needs Teach)
+  for (let i = 1; i <= 4; i++) {
+    C.insertAdjacentHTML('beforeend',
+      `<div class="card" data-id="C${i}"><span class="name">TOKEN C${i}</span> <span class="badge">Migrated</span>
+       <button class="copy flex p-1"><svg width="12" height="12"><path d="M1 1L11 11"/></svg></button>
+       <div class="hide flex p-1"><svg width="12" height="12"><path d="M0 6C3 1 9 1 12 6"/></svg></div></div>`);
+  }
+  // Decoy: a watchlist sidebar that uses the same eye icon. Must never be navigated or hidden.
+  for (let i = 1; i <= 3; i++) {
+    W.insertAdjacentHTML('beforeend',
+      `<div class="card wl" data-id="W${i}"><span class="name">WATCH ${i}</span>
+       <span class="hide"><i class="ri-eye-off-line"></i></span></div>`);
+  }
+  // A cards: a hover toolbar with a second eye icon appears while hovered.
+  A.querySelectorAll('.card').forEach(c => {
+    c.addEventListener('mouseenter', () => {
+      if (!c.querySelector('.hovertools')) {
+        c.insertAdjacentHTML('beforeend', '<div class="hovertools" style="position:absolute;left:8px;bottom:8px"><button class="hide2"><i class="ri-eye-off-line"></i></button></div>');
+      }
+    });
+    c.addEventListener('mouseleave', () => c.querySelector('.hovertools')?.remove());
+  });
+  // Live-list behaviours: re-render every B coin as new elements (plus a new coin on top),
+  // or reuse the rows and shift their contents down one (index-keyed virtual list).
+  const bCard = id => `<a class="tokenlink" href="/meme/${id}"><span class="name">TOKEN ${id}</span></a> <span class="hide"><i class="ri-eye-off-line text-sm"></i></span>`;
+  window.remountB = newId => {
+    B.replaceChildren(...[...B.children].map(r => r.cloneNode(true)));
+    B.insertAdjacentHTML('afterbegin', `<div class="row-wrap"><div class="card" data-id="${newId}">${bCard(newId)}</div></div>`);
+  };
+  window.shiftB = newId => {
+    const cards = [...B.querySelectorAll('.card')];
+    for (let i = cards.length - 1; i > 0; i--) {
+      cards[i].innerHTML = cards[i - 1].innerHTML;
+      cards[i].dataset.id = cards[i - 1].dataset.id;
+    }
+    cards[0].dataset.id = newId;
+    cards[0].innerHTML = bCard(newId);
+  };
+  // React-like delegation at the root
+  document.addEventListener('click', e => {
+    const hide = e.target.closest('.hide');
+    const card = e.target.closest('.card');
+    if (hide) { log.push('hide:' + card.dataset.id); (card.closest('.row-wrap') || card).remove(); return; }
+    if (e.target.closest('#hdrA')) { log.push('header'); return; }
+    if (e.target.closest('.buy')) { log.push('buy:' + card.dataset.id); return; }
+    if (e.target.closest('.devmig')) { log.push('solscan:' + card.dataset.id); return; } // dev migrations opens Solscan
+    if (e.target.closest('.social')) { e.preventDefault(); log.push('social:' + card.dataset.id); return; }
+    if (e.target.closest('.tokenlink')) return; // real navigation
+    if (card) log.push('open:' + card.dataset.id);
+  });
+  document.addEventListener('keydown', e => log.push('pagekey:' + e.key));
+  // Axiom-like hover shortcut: x shows the Twitter preview of the hovered coin.
+  // Tracked two ways: React-style (delegated mouseover) and native mouseenter/mouseleave.
+  let hoverOver = null, hoverEnter = null;
+  document.addEventListener('mouseover', e => { hoverOver = e.target.closest?.('.card')?.dataset.id || null; });
+  document.querySelectorAll('.card').forEach(c => {
+    c.addEventListener('mouseenter', () => { hoverEnter = c.dataset.id; });
+    c.addEventListener('mouseleave', () => { if (hoverEnter === c.dataset.id) hoverEnter = null; });
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'x') log.push(`twitter:${hoverOver}/${hoverEnter}`); });
+  // Dev migrations hover panel
+  document.addEventListener('mouseover', e => {
+    const d = e.target.closest?.('.devmig');
+    if (d) log.push('devpanel:' + d.closest('.card').dataset.id);
+  });
+</script>
+</body></html>

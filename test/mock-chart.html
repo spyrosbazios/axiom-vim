@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock TradingView chart</title></head>
+<body style="margin:0;background:#131722;color:#ccc;font:12px sans-serif">
+<div class="chart-container">
+  <div class="pane" style="position:relative;height:320px">
+    <canvas id="pane" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+    <canvas id="overlay" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+  </div>
+  <canvas id="timeaxis" style="display:block;width:100%;height:24px"></canvas>
+  <input id="symbolSearch" placeholder="symbol">
+  <div class="control-bar">
+    <button class="control-bar__btn control-bar__btn--zoom-out">-</button>
+    <button class="control-bar__btn control-bar__btn--turn-button">reset</button>
+  </div>
+</div>
+<script>
+  // Mimics TradingView: wheel over the pane zooms, Alt+R resets, optional control bar with Reset.
+  const log = m => parent.log.push('chart:' + m);
+  if (!location.search.includes('controls')) document.querySelector('.control-bar').remove();
+  document.querySelector('.pane').addEventListener('wheel', e => {
+    e.preventDefault();
+    log(`wheel:${e.deltaY}:${e.clientX > innerWidth * 0.7 ? 'right' : 'left'}`);
+  }, { passive: false });
+  addEventListener('keydown', e => log(e.altKey && e.keyCode === 82 ? 'reset-key' : 'key:' + e.key));
+  document.addEventListener('mousedown', e => { if (e.target.closest('.control-bar__btn--turn-button')) log('reset-button'); });
+</script>
+</body></html>

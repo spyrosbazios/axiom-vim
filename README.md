@@ -12,19 +12,64 @@ A Chrome extension (Manifest V3). Unofficial: not made by or affiliated with Axi
 
 ## Install
 
-1. Clone the repo:
+Axiom Vim isn't on the Chrome Web Store. You load it into your browser yourself, which takes about a minute.
 
-   ```sh
-   git clone https://github.com/spyrosbazios/axiom-vim.git
-   ```
+It works in Chromium browsers: Chrome, Brave, Edge, Opera, Arc, Helium and others. It hasn't been tested in Firefox or Safari.
 
-2. Open `chrome://extensions` and turn on **Developer mode**.
-3. Click **Load unpacked** and pick the `axiom-vim` folder.
-4. Reload any open axiom.trade tabs.
+### 1. Get the code
 
-It works in any Chromium browser that loads unpacked extensions (Chrome, Brave, Edge, Helium, …).
+**Option A: download a ZIP** (no git needed)
 
-To update, `git pull`, click the reload icon on the extension card, then reload the Axiom tab.
+1. Download [axiom-vim-main.zip](https://github.com/spyrosbazios/axiom-vim/archive/refs/heads/main.zip). You can also click **Code → Download ZIP** at the top of this page.
+2. Unzip it. You get a folder called `axiom-vim-main`.
+3. Move that folder somewhere permanent, like your Documents folder. The browser loads the extension from this folder every time it starts, so don't delete it.
+
+**Option B: clone with git**
+
+```sh
+git clone https://github.com/spyrosbazios/axiom-vim.git
+```
+
+### 2. Load it into your browser
+
+1. Open your browser's extensions page by typing its address into the address bar:
+
+   | Browser | Address |
+   | --- | --- |
+   | Chrome, Helium | `chrome://extensions` |
+   | Brave | `brave://extensions` |
+   | Edge | `edge://extensions` |
+   | Opera | `opera://extensions` |
+
+2. Turn on **Developer mode**. In Chrome it's a toggle at the top right; in Edge it's in the left sidebar.
+3. Click **Load unpacked**.
+4. Pick the folder from step 1: the one that contains `manifest.json`. That's `axiom-vim-main` for the ZIP or `axiom-vim` for git.
+5. **Axiom Vim** appears in the list of extensions. Make sure its switch is on.
+
+### 3. Pin it and check it works
+
+1. Click the puzzle-piece icon in the toolbar, then the pin next to **Axiom Vim**. This keeps its popup one click away.
+2. Reload any axiom.trade tabs you already had open. Tabs opened before the install don't get the shortcuts.
+3. Open [Pulse](https://axiom.trade/pulse) and press `j`. A coin in Final Stretch gets a highlighted ring.
+4. Click the extension icon and expand **Keys** to see every shortcut.
+
+### Updating
+
+- **ZIP:** download the new ZIP and replace the old folder's contents with the new ones, keeping the same folder.
+- **git:** run `git pull` inside the folder.
+
+Then open the extensions page, click the reload icon on the **Axiom Vim** card, and reload your Axiom tabs. Your settings and Teach rows are kept.
+
+### Uninstalling
+
+Click **Remove** on the **Axiom Vim** card on the extensions page, then delete the folder.
+
+### If the keys do nothing
+
+- **Reload the Axiom tab.** The page needs a reload after installing, updating or turning the extension back on.
+- **Check the switches.** The extension must be on in the extensions page, and **Enabled** must be ticked in its popup.
+- **Click on the page first.** Keys go to whatever has focus. If you just clicked the address bar or a text box, click an empty part of the page.
+- **"Pulse columns not found"** means Axiom renamed or moved its columns. Open an issue with the output of **Copy debug info** from the popup.
 
 ## Keys
 

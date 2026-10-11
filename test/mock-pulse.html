@@ -11,14 +11,28 @@
   .card:hover .hide { visibility: visible; }
   .card .name { display: inline-block; }
   .copy { margin-left: 8px; }
+  #T:not([hidden]) { display: flex; }
 </style></head>
 <body>
+<div id="app" style="display:flex">
+<!-- A left side panel like Axiom's wallet tracker: tabs, an icon strip, a virtual list of trades
+     (no hide buttons). Hidden unless a test shows it. -->
+<aside id="T" hidden style="width:260px;flex:none;flex-direction:row-reverse;border:1px solid #333;height:calc(100vh - 2px)">
+  <nav style="width:36px;flex:none;display:flex;flex-direction:column;gap:4px"><button>1</button><button>2</button><button>3</button><button>4</button></nav>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="display:flex;gap:8px;height:30px;flex:none"><span>All</span><span>Trades</span><span>Transfers</span></div>
+    <div id="TL" style="flex:1;min-height:0;overflow-y:auto"><div id="TV" style="position:relative;height:980px"></div></div>
+  </div>
+</aside>
+<main style="flex:1;min-width:0">
 <input id="search" placeholder="search" style="height:24px"> <a id="next" href="/pulse?page=2" style="color:#9cf">next page</a>
 <div class="cols">
   <div class="col"><header>New Pairs <button title="Hide filters" id="hdrA">filters</button></header><div class="list" id="A"></div></div>
   <div class="col"><header>Final Stretch</header><div class="list" id="B"></div></div>
   <div class="col"><header>Migrated</header><div class="list" id="C"></div></div>
   <aside id="W" style="width:220px;flex:none;border:1px solid #333;overflow:auto"><header style="height:40px">Watchlist</header></aside>
+</div>
+</main>
 </div>
 <script>
   window.log = [];
@@ -47,12 +61,27 @@
        <button class="copy flex p-1"><svg width="12" height="12"><path d="M1 1L11 11"/></svg></button>
        <div class="hide flex p-1"><svg width="12" height="12"><path d="M0 6C3 1 9 1 12 6"/></svg></div></div>`);
   }
-  // Decoy: a watchlist sidebar that uses the same eye icon. Must never be navigated or hidden.
+  // A right side panel like Axiom's Discover: coins with their own eye icon, then a second list
+  // (live streams, no hide button). hjkl go through both; its eye icons aren't Pulse coins.
   for (let i = 1; i <= 3; i++) {
     W.insertAdjacentHTML('beforeend',
       `<div class="card wl" data-id="W${i}"><span class="name">WATCH ${i}</span>
        <span class="hide"><i class="ri-eye-off-line"></i></span></div>`);
   }
+  W.insertAdjacentHTML('beforeend', `<div class="streams">${[1, 2, 3].map(i =>
+    `<div class="card stream" data-id="S${i}" style="height:44px"><span class="name">LIVE ${i}</span></div>`).join('')}</div>`);
+  // The tracker's trades: absolutely positioned rows, like a virtual list. T7 and T8 are two trades
+  // of the same coin, so they look alike. Hovering a trade shows a Buy button at its start.
+  for (let i = 1; i <= 14; i++) {
+    const n = i === 8 ? 7 : i;
+    TV.insertAdjacentHTML('beforeend',
+      `<div style="position:absolute;left:0;right:0;top:${(i - 1) * 70}px;height:64px"><div class="card trade" data-id="T${i}" style="height:48px;margin:0">
+       <span class="name">Wallet ${n}</span> bought TOK${n} <button class="copy"><i class="ri-file-copy-line"></i></button></div></div>`);
+  }
+  TV.querySelectorAll('.trade').forEach(c => {
+    c.addEventListener('mouseenter', () => setTimeout(() => c.querySelector('.qb') || c.insertAdjacentHTML('afterbegin', '<button class="qb">Buy</button>'), 30));
+    c.addEventListener('mouseleave', () => setTimeout(() => c.querySelector('.qb')?.remove(), 30));
+  });
   // A cards: a hover toolbar with a second eye icon appears while hovered.
   A.querySelectorAll('.card').forEach(c => {
     c.addEventListener('mouseenter', () => {

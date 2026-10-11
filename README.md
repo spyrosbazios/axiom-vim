@@ -4,7 +4,7 @@ Vim-style keyboard shortcuts for [axiom.trade](https://axiom.trade). Move throug
 
 A Chrome extension (Manifest V3). Unofficial: not made by or affiliated with Axiom.
 
-- **Pulse:** `hjkl` moves between coins in the New Pairs / Final Stretch / Migrated columns, `Enter` opens one, `Shift+X` hides it.
+- **Pulse:** `hjkl` moves between coins in the New Pairs / Final Stretch / Migrated columns and the side panels next to them, `Enter` opens one, `Shift+X` hides it.
 - **Trade page:** `j`/`k` scroll the Holders list, hold `x` for the X preview, `z` zooms the chart out, `Shift+B` blacklists the dev and leaves.
 - **Anywhere:** `Shift+H` / `Shift+L` go back / forward, like Vimium.
 - **Layout-proof:** keys match the physical key, so they work on any keyboard layout (e.g. Greek).
@@ -70,6 +70,7 @@ Click **Remove** on the **Axiom Vim** card on the extensions page, then delete t
 - **Check the switches.** The extension must be on in the extensions page, and the block at the top left of its popup must say **NORMAL** (click it if it says **OFF**).
 - **Click on the page first.** Keys go to whatever has focus. If you just clicked the address bar or a text box, click an empty part of the page.
 - **"Pulse columns not found"** means Axiom renamed or moved its columns. Open an issue with the output of **Copy debug info** from the popup.
+- **`h`/`l` skip a side panel?** Open an issue with **Copy debug info**. Its `sidePanels` part shows which panels and how many items were found.
 
 ## Keys
 
@@ -80,7 +81,7 @@ These are the defaults. Every one can be changed in the popup (see [Changing key
 | Key | Action |
 | --- | --- |
 | `j` / `k` | Next / previous coin in the column |
-| `h` / `l` | Previous / next column (lands on the coin at the same height) |
+| `h` / `l` | Previous / next column or side panel (lands on the item at the same height) |
 | `Enter` | Open the selected coin |
 | `w` | Open the selected (or hovered) coin's website in a new window |
 | `x` | Axiom's own X (Twitter) preview, for the selected coin |
@@ -92,7 +93,9 @@ These are the defaults. Every one can be changed in the popup (see [Changing key
 - With nothing selected, the first `hjkl` press starts at the middle column, or at the coin under the mouse if you just moved it there.
 - Moving the mouse more than a few pixels clears the selection and hands control back to the mouse.
 - After a hide, the selection moves to the next coin in the same column.
-- Only coins inside the three Pulse columns count. Menus, sidebars and dropdowns are never touched.
+- Side panels docked next to the columns (like the wallet tracker or Discover) are extra columns: `h` from New Pairs enters the left one, `l` from Migrated the right one. In a panel with two lists, `j` runs through both.
+- `Enter` on a panel item clicks it like a mouse would. `Shift+X` works only on items with their own hide (eye) button.
+- Floating panels, menus and dropdowns are never touched.
 
 ### Trade page
 

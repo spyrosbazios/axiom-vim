@@ -211,14 +211,13 @@ const check = (name, ok, extra = '') => {
     check('k then Shift+X hides B8', (await hides()).join() === 'hide:B8', JSON.stringify(await log()));
     check('cursor stays in place → B9 slid up into it', (await selected()) === 'B9', await selected());
     await key('l');
-    check('l with no column to the right stays (C needs Teach)', (await selected()) === 'B9', await selected());
-
+    check('l skips Migrated (empty until Teach) into the right side panel', /^[WS]\d$/.test(await selected()), await selected());
     await key('l');
-    check('l never enters the watchlist sidebar', (await selected()) === 'B9', await selected());
+    check('l at the right-most panel stays', /^[WS]\d$/.test(await selected()), await selected());
     await clearLog();
     await hover('[data-id=W2] .name');
     await hideKey();
-    check('hover a watchlist item + Shift+X does nothing', !(await hides()).length, JSON.stringify(await log()));
+    check('hover a side-panel coin + Shift+X clicks its own hide button', (await hides()).join() === 'hide:W2', JSON.stringify(await log()));
     await hover('[data-id=B9] .name');
     await moveTo(600, 12);
     await key('j'); await key('Escape');
@@ -323,6 +322,50 @@ const check = (name, ok, extra = '') => {
     const aIdx = aSteps.map(id => Number(id.slice(1)));
     check('column with hover toolbars: every key moves exactly one coin', aIdx.every((n, i) => i === 0 || Math.abs(n - aIdx[i - 1]) === 1) && aIdx[1] === aIdx[0] - 1, aSteps.join());
 
+    section('— Pulse: side panels');
+    await load();
+    await page.evaluate(() => { T.hidden = false; }); await sleep(100);
+    await neutral(); await key('j');
+    check('a left panel doesn\'t move the start (B1)', (await selected()) === 'B1', await selected());
+    await key('h'); await key('h');
+    check('h from New Pairs enters the left panel (tracker)', /^T\d+$/.test(await selected()), await selected());
+    const tStart = await selected();
+    await key('h');
+    check('h at the left-most panel stays', (await selected()) === tStart, await selected());
+    await key('k', 20);
+    check('k up the tracker to its first trade (T1), never the icon strip or tabs', (await selected()) === 'T1', await selected());
+    // Hovering a trade changes it (Buy button). With a look-alike next to it, the ring must not swap
+    // between the two.
+    const ringSamples = async () => {
+      const seen = [];
+      for (let i = 0; i < 12; i++) { seen.push(await selected()); await sleep(40); }
+      return [...new Set(seen)].join();
+    };
+    await key('j', 6); await sleep(300);
+    const at7 = await ringSamples();
+    await key('j'); await sleep(300);
+    const at8 = await ringSamples();
+    check('look-alike trades (T7, T8) changed by hover: the ring stays put on each', at7 === 'T7' && at8 === 'T8', `${at7} | ${at8}`);
+    await key('j', 20);
+    const tlScroll = await page.evaluate(() => TL.scrollTop);
+    check('j down the virtual list to T14, scrolling it into view', (await selected()) === 'T14' && tlScroll > 0, `${await selected()} scrollTop=${tlScroll}`);
+    await clearLog(); await key('Enter');
+    check('Enter clicks the trade, not its copy button', (await log()).join() === 'open:T14', JSON.stringify(await log()));
+    await clearLog(); await hideKey();
+    check('Shift+X on an item without a hide button hides nothing and says so', !(await hides()).length && /no hide button/.test(await toast()), `${JSON.stringify(await log())} ${await toast()}`);
+    await key('l');
+    check('l from the panel goes back to New Pairs', /^A\d$/.test(await selected()), await selected());
+    await key('l'); await key('l'); await key('k', 12);
+    check('right panel: k up to its first coin (W1)', (await selected()) === 'W1', await selected());
+    const wSteps = [];
+    for (let i = 0; i < 6; i++) { await key('j'); wSteps.push(await selected()); }
+    check('j goes through the coins, then the second list (W2 W3 S1 S2 S3 S3)', wSteps.join() === 'W2,W3,S1,S2,S3,S3', wSteps.join());
+    await key('k'); await clearLog(); await key('Enter');
+    check('Enter opens a second-list item (S2)', (await log()).join() === 'open:S2', JSON.stringify(await log()));
+    const panelDbg = await debugInfo();
+    const sp = panelDbg?.pulse?.sidePanels || [];
+    check('debug info lists the side panels', sp.map(p => `${p.title}:${p.items}`).join() === 'left panel:14,right panel:6' && !!sp[1].sample[0].hide && !sp[0].sample[0].hide, JSON.stringify(sp));
+
     section('— Pulse: w opens the coin website');
     await load(); await neutral(); await key('Escape');
     await key('j'); await key('h'); // A1
@@ -388,7 +431,7 @@ const check = (name, ok, extra = '') => {
     await key('j', 2);
     check('"Migrated" badges on coins don\'t break the column (C1 → C4, C2 is gone)', (await selected()) === 'C4', await selected());
     await key('l');
-    check('l from Migrated stays (watchlist ignored)', (await selected()) === 'C4', await selected());
+    check('l from Migrated enters the side panel', /^[WS]\d$/.test(await selected()), await selected());
 
     section('— popup');
     const popup = await browser.newPage();

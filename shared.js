@@ -33,8 +33,8 @@ const AXS_ANYWHERE = ['pulse', 'pair', 'other'];
 const AXS_ACTIONS = [
   { id: 'down', pages: AXS_PULSE, vim: true, label: 'Next coin', key: axsKey('KeyJ') },
   { id: 'up', pages: AXS_PULSE, vim: true, label: 'Previous coin', key: axsKey('KeyK') },
-  { id: 'left', pages: AXS_PULSE, vim: true, label: 'Previous column', key: axsKey('KeyH') },
-  { id: 'right', pages: AXS_PULSE, vim: true, label: 'Next column', key: axsKey('KeyL') },
+  { id: 'left', pages: AXS_PULSE, vim: true, label: 'Previous column or side panel', key: axsKey('KeyH') },
+  { id: 'right', pages: AXS_PULSE, vim: true, label: 'Next column or side panel', key: axsKey('KeyL') },
   { id: 'open', pages: AXS_PULSE, vim: true, label: 'Open the selected coin', key: axsKey('Enter') },
   { id: 'clear', pages: AXS_PULSE, vim: true, label: 'Clear the selection', key: axsKey('Escape') },
   // Shift+X, because plain x is Axiom's own X-preview key on Pulse.
@@ -72,8 +72,8 @@ async function axsMigrateKeys() {
   await chrome.storage.sync.remove('hideKey');
 }
 
-// Pulse column titles (lowercase), left to right. hjkl only moves between coins inside these columns;
-// the first Final Stretch coin is preselected when you arrive on Pulse.
+// Pulse column titles (lowercase), left to right. hjkl moves between coins inside these columns, plus
+// the items of the side panels beside them; the first Final Stretch coin is preselected when you arrive on Pulse.
 const AXS_PULSE_COLUMNS = ['new pairs', 'final stretch', 'migrated'];
 
 // Token (trade) page path. Enter follows a link like this inside the selected coin; j/k scroll holders there.

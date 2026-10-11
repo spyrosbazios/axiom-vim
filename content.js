@@ -1,6 +1,6 @@
 // Axiom Vim. Default keys (every one can be changed in the popup, see AXS_ACTIONS):
-// Pulse: vim-style navigation (h/j/k/l, Enter opens, w website, Shift+X hides), starting on the
-// first Final Stretch coin; the selected coin
+// Pulse: vim-style navigation (h/j/k/l, Enter opens, w website, Shift+X hides) through the coin
+// columns and the side panels, starting on the first Final Stretch coin; the selected coin
 // counts as hovered, so Axiom's own hover shortcuts (x = Twitter preview) act on it.
 // Trade page: j/k scroll Holders, hold x for the X preview, w opens the website,
 // z/Z zoom the chart out/reset; Shift+B blacklists the dev, hides the token and goes back; Shift+X
@@ -15,7 +15,7 @@
   let kbdAnchor = null; // mouse position when the keyboard last took over (or the page/route started)
   let mouseMoved = false; // has the mouse moved since then? Only then does "the coin under the mouse" count
   let lastPath = location.pathname;
-  let cursor = null; // selected coin: { el, column (title), clip, y (ring centre), fp, below, above }
+  let cursor = null; // selected coin: { el, column (title), clip, y (ring centre), fp, below, above, looks, prev }
   let ring = null;
   let rafId = 0;
   let hovered = null; // element that last got our synthetic hover
@@ -258,9 +258,11 @@
   // --- Pulse: coins and columns ---------------------------------------------------------
 
   // Every coin card has exactly one hide control, so the controls tell us where the cards are.
-  // Only controls inside the Pulse columns count, so menus, sidebars and dropdowns are ignored.
+  // Only controls inside the Pulse columns count, so menus and dropdowns are ignored. Side panels
+  // (e.g. Axiom's wallet tracker and Discover) are extra columns at either end, see sidePanels.
   // Returns { found, columns: [[hit]], byCard: Map<cardEl, hit>, middle },
-  // hit = { card, control, rect, column (title), col, idx }; `found` is false if no column titles were found.
+  // hit = { card, control, rect, column (title), col, idx }; control is null for a panel item without
+  // a hide button. `found` is false if no column titles were found.
   function scanCards() {
     const pulseCols = pulseColumns();
     const roots = pulseCols.map(c => c.root);
@@ -309,22 +311,102 @@
     }
     const coins = hits.filter((h, i) => !hits.some((o, j) => (o.card === h.card ? j < i : o.card.contains(h.card))));
 
-    // One column per Pulse column, left to right, coins top to bottom. Empty columns are skipped.
-    const perColumn = pulseCols.map(({ title, root }) => {
+    // One column per Pulse column, left to right, coins top to bottom, with the side panels at either
+    // end. Empty columns are skipped.
+    const perPulse = pulseCols.map(({ title, root }) => {
       const col = coins.filter(h => root.contains(h.card)).sort((a, b) => a.rect.top - b.rect.top);
       col.forEach(h => { h.column = title; });
       return col;
     });
+    const panels = sidePanels(pulseCols);
+    const perColumn = [...panels.left.map(panelItems), ...perPulse, ...panels.right.map(panelItems)];
     const columns = perColumn.filter(col => col.length);
     columns.forEach((col, c) => col.forEach((h, i) => { h.col = c; h.idx = i; }));
-    // The middle Pulse column (Final Stretch); if it's empty, the middle of what's left.
-    const middle = columns.indexOf(perColumn[Math.floor((perColumn.length - 1) / 2)]);
+    // Start in the middle Pulse column (Final Stretch); if it's empty, the middle of the Pulse columns left.
+    const filled = perPulse.filter(col => col.length);
+    const mid = perPulse[Math.floor((perPulse.length - 1) / 2)];
+    const middle = columns.indexOf(mid?.length ? mid : filled[Math.floor(filled.length / 2)]);
     return {
       found: pulseCols.length > 0,
       columns,
       byCard: new Map(columns.flat().map(h => [h.card, h])),
       middle: middle >= 0 ? middle : Math.floor(columns.length / 2)
     };
+  }
+
+  // Side panels: tall boxes beside the Pulse columns, like Axiom's wallet tracker (left) and Discover
+  // (right). Only the columns' relatives count, and nothing floating, so popups and menus never do.
+  // Returns { left, right }: [{ title, root }] each, left to right. Titles count out from the columns:
+  // "right panel", "right panel 2", …
+  function sidePanels(pulseCols) {
+    const roots = pulseCols.map(c => c.root);
+    if (!roots.length) return { left: [], right: [] };
+    const rects = roots.map(r => r.getBoundingClientRect());
+    const left = Math.min(...rects.map(r => r.left));
+    const right = Math.max(...rects.map(r => r.right));
+    const top = Math.min(...rects.map(r => r.top));
+    const bottom = Math.max(...rects.map(r => r.bottom));
+    let common = roots[0];
+    while (!roots.every(r => common.contains(r))) common = common.parentElement;
+
+    const found = [];
+    for (let p = common; p && p !== document.documentElement; p = p.parentElement) {
+      for (const el of p.children) {
+        if (roots.some(r => el.contains(r))) continue;
+        const r = el.getBoundingClientRect();
+        if ((r.right <= left + 2 || r.left >= right - 2) && r.width >= 120 && r.width <= innerWidth * 0.5 &&
+          r.height >= innerHeight * 0.4 && r.top < bottom && r.bottom > top && r.right > 0 && r.left < innerWidth &&
+          getComputedStyle(el).position !== 'fixed') found.push({ root: el, r });
+      }
+    }
+    const named = (side, list) => list.map((p, i) => ({ root: p.root, title: `${side} panel${i ? ` ${i + 1}` : ''}` }));
+    return {
+      left: named('left', found.filter(p => p.r.right <= left + 2).sort((a, b) => b.r.left - a.r.left)).reverse(),
+      right: named('right', found.filter(p => p.r.left >= right - 2).sort((a, b) => a.r.left - b.r.left))
+    };
+  }
+
+  // A panel's items, top to bottom: the rows of each list in it. A list is a box whose children are
+  // mostly one kind of element, stacked, each the size of an item (Axiom's are virtual lists of
+  // absolutely positioned rows). Lists inside an item (its lines of text) don't count; a panel with
+  // several lists (Discover) goes through them in the order they show on screen.
+  function panelItems({ title, root }) {
+    const kindOf = el => `${el.tagName}.${typeof el.className === 'string' ? el.className : ''}`;
+    const lists = [];
+    for (const el of [root, ...root.querySelectorAll('*')]) {
+      if (el.children.length < 2) continue;
+      const kids = [...el.children];
+      const counts = new Map();
+      for (const c of kids) counts.set(kindOf(c), (counts.get(kindOf(c)) || 0) + 1);
+      const [kind, n] = [...counts].sort((a, b) => b[1] - a[1])[0];
+      if (n < kids.length * 0.6) continue;
+      const width = el.getBoundingClientRect().width;
+      const rows = kids.filter(c => kindOf(c) === kind)
+        .map(c => ({ el: c, r: c.getBoundingClientRect() }))
+        .filter(({ r }) => r.height > 0)
+        .sort((a, b) => a.r.top - b.r.top);
+      const itemSized = ({ r }) => r.height >= 24 && r.height <= innerHeight * 0.35 && r.width >= 120 && r.width >= width * 0.7;
+      const stacked = rows.every((x, i) => !i || x.r.top >= rows[i - 1].r.bottom - 2);
+      const virtual = rows.length >= 2 && getComputedStyle(rows[0].el).position === 'absolute';
+      if ((rows.length >= 3 || virtual) && stacked && rows.every(itemSized)) lists.push({ el, rows });
+    }
+    const outer = lists.filter(l => !lists.some(o => o !== l && o.rows.some(x => x.el.contains(l.el))));
+    const shownTop = l => Math.max(l.el.getBoundingClientRect().top, scrollParent(l.el).getBoundingClientRect().top);
+    return outer.sort((a, b) => shownTop(a) - shownTop(b)).flatMap(l => l.rows.map(({ el }) => {
+      const card = unwrap(el);
+      return { card, control: panelHideControl(card), rect: card.getBoundingClientRect(), column: title };
+    }));
+  }
+
+  // A panel item's own hide button, if it has one (Discover's coins do; tracked trades don't).
+  function panelHideControl(card) {
+    for (const sel of [settings.hideSelector, ...AXS_AUTO_HIDE_SELECTORS].filter(Boolean)) {
+      try {
+        const el = card.querySelector(sel);
+        if (el) return el;
+      } catch {}
+    }
+    return null;
   }
 
   // The Pulse columns, found by their titles, left to right: [{ title, head, root }]. Each root is the
@@ -390,6 +472,11 @@
     const fps = new Map(inColumn.map(h => [h, fingerprint(h.card)]));
     const same = model.byCard.get(cursor.el);
     if (same && fps.get(same) === cursor.fp) return same;
+    // Still here but changed: it changed in place (our hover added buttons, a value updated), unless
+    // the list shifted under it. Following its old look after an in-place change can land on a
+    // look-alike (two trades of one coin) and swap between the two every frame.
+    const own = inColumn.find(h => h.card.contains(cursor.el) || cursor.el.contains(h.card));
+    if (own && !listShifted(inColumn, fps, own)) return own;
     const nearest = list => list.reduce((best, h) =>
       (!best || Math.abs(middleY(h.rect) - cursor.y) < Math.abs(middleY(best.rect) - cursor.y) ? h : best), null);
     const byFp = fp => fp && nearest(inColumn.filter(h => fps.get(h) === fp));
@@ -397,6 +484,20 @@
       inColumn.find(h => h.card.contains(cursor.el) || cursor.el.contains(h.card)) ||
       byFp(cursor.below) || byFp(cursor.above) ||
       nearest(inColumn);
+  }
+
+  // A list that reuses its rows shows each coin one row further on: most rows change at once. Our hover
+  // changes only the selected coin and the one we just left, so those two don't count.
+  function listShifted(inColumn, fps, own) {
+    let changed = 0;
+    let kept = 0;
+    for (const h of inColumn) {
+      const before = cursor.looks?.get(h.card);
+      if (h === own || h.card === cursor.prev || before === undefined) continue; // new rows: e.g. scrolled into view
+      if (before === fps.get(h)) kept++;
+      else changed++;
+    }
+    return changed > kept;
   }
 
   // Logo URL plus the first bit of text (the ticker). Ages like "12s" change every second, so skip them.
@@ -453,14 +554,21 @@
 
     const next = columns[cur.col + (dir === 'left' ? -1 : 1)];
     if (!next) return;
-    // Land on the coin at the same height on screen.
+    // Land on the coin at the same height on screen, among those not scrolled out of sight.
     const y = middleY(cur.rect);
     const dist = h => Math.abs(middleY(h.rect) - y);
-    setCursor(next.reduce((best, h) => (dist(h) < dist(best) ? h : best)), model);
+    const shown = next.filter(onScreen);
+    setCursor((shown.length ? shown : next).reduce((best, h) => (dist(h) < dist(best) ? h : best)), model);
+  }
+
+  // Is the coin at least partly visible in its list (virtual lists render a few rows out of sight)?
+  function onScreen(hit) {
+    const c = scrollParent(hit.card).getBoundingClientRect();
+    return hit.rect.bottom > Math.max(c.top, 0) && hit.rect.top < Math.min(c.bottom, innerHeight);
   }
 
   function setCursor(hit, model) {
-    cursor = {};
+    cursor = { prev: cursor?.el };
     pointCursorAt(hit, model);
     keyboardTookOver();
     hit.card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
@@ -468,12 +576,15 @@
     if (!rafId) rafId = requestAnimationFrame(drawRing);
   }
 
+  // prev: the coin we hovered before this one (its look changes back when we leave it).
   function pointCursorAt(hit, model) {
     const col = model.columns[hit.col] || [];
-    const fpAt = i => (col[i] ? fingerprint(col[i].card) : '');
+    const looks = new Map(col.map(h => [h.card, fingerprint(h.card)]));
+    const fpAt = i => (col[i] ? looks.get(col[i].card) : '');
+    if (cursor.el && cursor.el !== hit.card) cursor.prev = cursor.el;
     Object.assign(cursor, {
       el: hit.card, column: hit.column, clip: scrollParent(hit.card), y: middleY(hit.rect),
-      fp: fingerprint(hit.card), below: fpAt(hit.idx + 1), above: fpAt(hit.idx - 1)
+      fp: looks.get(hit.card), below: fpAt(hit.idx + 1), above: fpAt(hit.idx - 1), looks
     });
   }
 
@@ -541,6 +652,10 @@
   function hideCurrent() {
     const hit = targetCoin(scanCards());
     if (!hit) return false;
+    if (!hit.control) {
+      toast('This item has no hide button');
+      return false;
+    }
     clickOnly(hit.control);
     // The ring loop moves the cursor to the next coin once this one is gone.
     return true;
@@ -594,7 +709,7 @@
     let textSpot = null;
     for (const [x, y] of points) {
       const el = document.elementFromPoint(x, y);
-      if (!el || !card.contains(el) || control.contains(el) || interactiveBetween(el, card, cardArea)) continue;
+      if (!el || !card.contains(el) || control?.contains(el) || interactiveBetween(el, card, cardArea)) continue;
       if (!hasOwnText(el)) return { el, x, y };
       textSpot ||= { el, x, y };
     }
@@ -1308,7 +1423,15 @@
         sample: (model.columns[model.middle] || []).slice(0, 4).map(h => ({
           card: desc(h.card), control: desc(h.control), height: Math.round(h.rect.height),
           controlsInside: controls.filter(c => h.card.contains(c)).length
-        }))
+        })),
+        // Side panels, with what each of their first items looks like.
+        sidePanels: Object.values(sidePanels(pulseColumns())).flat().map(p => {
+          const items = panelItems(p);
+          return {
+            title: p.title, panel: desc(p.root), items: items.length,
+            sample: items.slice(0, 2).map(h => ({ card: desc(h.card), height: Math.round(h.rect.height), hide: h.control ? desc(h.control) : null }))
+          };
+        })
       };
     });
     if (onPairPage()) {

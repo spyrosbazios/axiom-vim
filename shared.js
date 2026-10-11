@@ -6,11 +6,10 @@ const AXS_TRADE_TABS = ['Trades', 'Positions', 'Orders', 'Holders', 'Top Traders
 const AXS_DEFAULTS = {
   enabled: true,
   vimNav: true,
-  // Mouse-wheel notches per z press on the trade-page chart.
+  // Mouse-wheel notches per zoom-out press on the trade-page chart.
   zoomSteps: 4,
-  // Stored by physical key (`code`), so it works with any keyboard layout (e.g. Greek).
-  // Shift+X, because plain x is Axiom's own Twitter-preview key.
-  hideKey: { code: 'KeyX', ctrl: false, alt: false, shift: true, meta: false },
+  // Keys changed in the popup, by action id (see AXS_ACTIONS). Actions not in here keep their default.
+  keys: {},
   // CSS selectors learned with the popup's Teach rows. Empty = auto-detect, except pairHideSelector:
   // without it the hide key does nothing on trade pages.
   hideSelector: '',
@@ -22,10 +21,56 @@ const AXS_DEFAULTS = {
   blacklistSelector: ''
 };
 
-// Fixed vim keys, by physical key. Only active on /pulse.
-const AXS_NAV_KEYS = { KeyH: 'left', KeyJ: 'down', KeyK: 'up', KeyL: 'right' };
-// Shift + key, Vimium-style browser history. Active on all axiom.trade pages.
-const AXS_HISTORY_KEYS = { KeyH: 'back', KeyL: 'forward' };
+// Where a shortcut works: Pulse, trade pages, both, or every axiom.trade page.
+const AXS_PULSE = ['pulse'];
+const AXS_TRADE = ['pair'];
+const AXS_BOTH = ['pulse', 'pair'];
+const AXS_ANYWHERE = ['pulse', 'pair', 'other'];
+
+// Every shortcut with its default key, in the popup's order. Keys go by physical key (`code`), so they
+// work with any keyboard layout (e.g. Greek). vim: turned off by the popup's "Vim keys" switch.
+// If two share a key on a page, the first one listed that applies there gets it.
+const AXS_ACTIONS = [
+  { id: 'down', pages: AXS_PULSE, vim: true, label: 'Next coin', key: axsKey('KeyJ') },
+  { id: 'up', pages: AXS_PULSE, vim: true, label: 'Previous coin', key: axsKey('KeyK') },
+  { id: 'left', pages: AXS_PULSE, vim: true, label: 'Previous column', key: axsKey('KeyH') },
+  { id: 'right', pages: AXS_PULSE, vim: true, label: 'Next column', key: axsKey('KeyL') },
+  { id: 'open', pages: AXS_PULSE, vim: true, label: 'Open the selected coin', key: axsKey('Enter') },
+  { id: 'clear', pages: AXS_PULSE, vim: true, label: 'Clear the selection', key: axsKey('Escape') },
+  // Shift+X, because plain x is Axiom's own X-preview key on Pulse.
+  { id: 'hide', pages: AXS_BOTH, label: 'Hide the coin (trade page: then go back, after Teach)', key: axsKey('KeyX', 'shift') },
+  { id: 'website', pages: AXS_BOTH, label: 'Open its website in a new window', key: axsKey('KeyW') },
+  { id: 'holdersDown', pages: AXS_TRADE, vim: true, label: 'Scroll Holders down a row', key: axsKey('KeyJ') },
+  { id: 'holdersUp', pages: AXS_TRADE, vim: true, label: 'Scroll Holders up a row', key: axsKey('KeyK') },
+  { id: 'xPreview', pages: AXS_TRADE, label: 'X preview while held', key: axsKey('KeyX') },
+  { id: 'closePreview', pages: AXS_TRADE, label: 'Close the X preview', key: axsKey('Escape') },
+  { id: 'zoomOut', pages: AXS_TRADE, label: 'Zoom the chart out (hold to keep going)', key: axsKey('KeyZ') },
+  { id: 'zoomReset', pages: AXS_TRADE, label: 'Reset the chart view', key: axsKey('KeyZ', 'shift') },
+  { id: 'blacklist', pages: AXS_TRADE, label: 'Blacklist dev, hide, go back', key: axsKey('KeyB', 'shift') },
+  { id: 'back', pages: AXS_ANYWHERE, vim: true, label: 'Back', key: axsKey('KeyH', 'shift') },
+  { id: 'forward', pages: AXS_ANYWHERE, vim: true, label: 'Forward', key: axsKey('KeyL', 'shift') }
+];
+
+function axsKey(code, ...mods) {
+  return { code, ctrl: mods.includes('ctrl'), alt: mods.includes('alt'), shift: mods.includes('shift'), meta: mods.includes('meta') };
+}
+
+// Every action's key: the one set in the popup, else its default. `keys` is the stored setting.
+function axsKeymap(keys) {
+  return Object.fromEntries(AXS_ACTIONS.map(a => [a.id, typeof keys?.[a.id]?.code === 'string' ? keys[a.id] : a.key]));
+}
+
+function axsSameKey(a, b) {
+  return a.code === b.code && !!a.ctrl === !!b.ctrl && !!a.alt === !!b.alt && !!a.shift === !!b.shift && !!a.meta === !!b.meta;
+}
+
+// Before 0.4 only the hide key could be changed, stored as `hideKey`: move it into `keys`.
+async function axsMigrateKeys() {
+  const { hideKey, keys } = await chrome.storage.sync.get(['hideKey', 'keys']);
+  if (!hideKey) return;
+  await chrome.storage.sync.set({ keys: { hide: hideKey, ...keys } });
+  await chrome.storage.sync.remove('hideKey');
+}
 
 // Pulse column titles (lowercase), left to right. hjkl only moves between coins inside these columns;
 // the first Final Stretch coin is preselected when you arrive on Pulse.
@@ -53,13 +98,21 @@ const AXS_AUTO_HIDE_SELECTORS = [
 ];
 
 function axsKeyMatches(e, k) {
-  return e.code === k.code &&
+  return (e.code === k.code || (e.code === 'NumpadEnter' && k.code === 'Enter')) &&
     e.ctrlKey === !!k.ctrl && e.altKey === !!k.alt &&
     e.shiftKey === !!k.shift && e.metaKey === !!k.meta;
 }
 
+const AXS_KEY_NAMES = {
+  Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', Minus: '-',
+  Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'", Comma: ',',
+  Period: '.', Slash: '/'
+};
+
+// A plain letter shows as typed (j); with modifiers, like a shortcut (Shift + J).
 function axsKeyLabel(k) {
-  const name = k.code.replace(/^Key|^Digit/, '').replace(/^Numpad/, 'Num ');
-  return [k.ctrl && 'Ctrl', k.alt && 'Alt', k.shift && 'Shift', k.meta && 'Meta', name]
-    .filter(Boolean).join(' + ');
+  const mods = [k.ctrl && 'Ctrl', k.alt && 'Alt', k.shift && 'Shift', k.meta && 'Meta'].filter(Boolean);
+  let name = AXS_KEY_NAMES[k.code] || k.code.replace(/^Key|^Digit/, '').replace(/^Numpad/, 'Num ');
+  if (!mods.length && /^Key[A-Z]$/.test(k.code)) name = name.toLowerCase();
+  return [...mods, name].join(' + ');
 }

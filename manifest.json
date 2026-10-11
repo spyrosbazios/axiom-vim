@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Axiom Vim",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "description": "Vim-style keyboard shortcuts for axiom.trade: navigate, open and hide Pulse coins; holders, X preview, chart zoom and more on trade pages.",
   "permissions": ["storage"],
   "action": {

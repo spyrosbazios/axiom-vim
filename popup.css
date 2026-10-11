@@ -1,119 +1,310 @@
 :root {
-  --bg: #0b0d12;
-  --panel: #151922;
-  --border: #2a3040;
-  --text: #e5e7eb;
-  --muted: #8b93a7;
-  --accent: #7c8cff;
+  --bg: #151925;
+  --surface: #1b2030;
+  --raised: #232a3c;
+  --line: #2c3346;
+  --text: #e6e8f0;
+  --muted: #8d94a8;
+  --faint: #5f667a;
+  --accent: #7c8cff; /* the ring drawn around the selected coin on the page */
+  --accent-ink: #0f1220;
+  --warn: #f0b03f;
+  --sans: system-ui, "Segoe UI", Ubuntu, Cantarell, sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace;
 }
 
 body {
-  width: 280px;
+  width: 320px;
   margin: 0;
-  padding: 14px;
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.4 system-ui, sans-serif;
+  font: 13px/1.45 var(--sans);
 }
 
-h1 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.section {
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-
-.section .row { margin-bottom: 4px; }
-.teach { margin-top: 10px; }
-.btns { display: flex; gap: 6px; }
-
-.muted { color: var(--muted); }
-
-.status { margin: 10px 0 0; font-size: 12px; color: var(--accent); }
-
-.help { margin-top: 10px; font-size: 12px; }
-.help summary { font-weight: 600; cursor: pointer; }
-.help h2 { margin: 10px 0 4px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.help table { width: 100%; border-collapse: collapse; }
-.help td { padding: 2px 0; vertical-align: top; }
-.help td:first-child { width: 1%; padding-right: 10px; white-space: nowrap; }
-.help p { margin: 10px 0 0; font-size: 11px; }
-.vim-off .help .vim { opacity: .4; }
-
-kbd {
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: var(--bg);
-  font: 600 11px/1.5 ui-monospace, monospace;
-}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
 
 button {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--text);
   font: inherit;
+  color: inherit;
   cursor: pointer;
 }
 
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:disabled { opacity: .4; cursor: default; }
+button:disabled { cursor: default; }
 
-.key {
-  min-width: 48px;
-  font-family: ui-monospace, monospace;
+small, .hint, .meta { color: var(--muted); font-size: 11.5px; font-weight: 400; }
+
+/* --- Statusline ---------------------------------------------------------------------- */
+
+.statusline {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The mode block, cut like a powerline segment. Its checkbox is #enabled. */
+.mode {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 18px 0 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 11px/1 var(--mono);
+  letter-spacing: .04em;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 0 100%);
+}
+
+.mode input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.mode:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: -4px; }
+.mode-off { display: none; }
+.mode:has(input:not(:checked)) { background: var(--faint); color: var(--text); }
+.mode:has(input:not(:checked)) .mode-on { display: none; }
+.mode:has(input:not(:checked)) .mode-off { display: inline; }
+
+.statusline .name { padding-left: 8px; font-weight: 600; }
+.ruler { margin-left: auto; padding-right: 12px; color: var(--muted); font: 11px/1 var(--mono); }
+
+/* With everything off, the settings still work but read as inactive. */
+body.off main { opacity: .55; }
+
+/* --- Settings ------------------------------------------------------------------------- */
+
+.settings { padding: 6px 14px 8px; }
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.setting small { display: block; }
+
+.switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border-radius: 9px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .15s, background .15s;
+}
+
+.switch:checked { background: var(--accent); }
+.switch:checked::before { transform: translateX(14px); background: var(--accent-ink); }
+
+input[type="number"] {
+  flex: none;
+  width: 44px;
+  padding: 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: 12px/1.3 var(--mono);
+  text-align: center;
+}
+
+/* --- Folds (Keys, Teach) -------------------------------------------------------------- */
+
+.fold { border-top: 1px solid var(--line); }
+
+.fold summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.fold summary::-webkit-details-marker { display: none; }
+
+.fold summary::before {
+  content: "▸";
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform .15s;
+}
+
+.fold[open] summary::before { transform: rotate(90deg); }
+.fold summary .meta { margin-left: auto; }
+.fold > :not(summary) { margin-left: 14px; margin-right: 14px; }
+.fold > .hint { margin-top: -4px; margin-bottom: 4px; }
+.fold > :last-child { margin-bottom: 12px; }
+
+/* --- Keys ----------------------------------------------------------------------------- */
+
+#keyTables h2 {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: 11.5px;
   font-weight: 600;
 }
 
-.key.recording {
-  border-color: var(--accent);
-  color: var(--accent);
+#keyTables table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+#keyTables td { padding: 3px 0; vertical-align: top; }
+#keyTables td:first-child { width: 80px; padding-right: 8px; white-space: nowrap; } /* same in every table, so labels line up */
+#keyTables td:nth-child(3) { width: 22px; text-align: right; }
+#keyTables .recording td:nth-child(2) { color: var(--accent); }
+
+/* Keycaps: plain = default, accent = changed, amber = shared with another action, a blinking cursor = waiting for a key. */
+.key {
+  min-width: 24px;
+  padding: 2px 6px 1px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--raised);
+  font: 600 11px/1.4 var(--mono);
+  white-space: nowrap;
 }
 
-code {
-  display: block;
-  overflow-wrap: anywhere;
+.key:hover { border-color: var(--muted); }
+.changed .key { border-color: var(--accent); color: var(--accent); }
+.conflict .key { border-color: var(--warn); color: var(--warn); }
+.key.recording { border-color: var(--accent); color: var(--accent); }
+
+.key.recording::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 11px;
+  vertical-align: -1px;
+  background: currentColor;
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Keys that stay Axiom's own: not ours to change, so not a button. */
+#keyTables kbd {
+  display: inline-block;
+  padding: 1px 6px 0;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
   color: var(--muted);
-  font: 11px/1.4 ui-monospace, monospace;
+  font: 600 11px/1.4 var(--mono);
 }
 
-input[type="checkbox"] { accent-color: var(--accent); }
+.reset {
+  padding: 0 2px 0 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
 
-input[type="number"] {
-  width: 52px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
+.reset:hover { color: var(--accent); }
+.reset:disabled { visibility: hidden; } /* only changed keys have something to reset */
+
+.vim-off .help .vim { opacity: .4; }
+
+.fold-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.fold-foot button { flex: none; white-space: nowrap; }
+
+/* --- Teach ---------------------------------------------------------------------------- */
+
+.teach {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1px 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.fold > .hint + .teach { border-top: 0; }
+.btns { display: flex; gap: 2px; }
+
+.t {
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.t:hover { border-color: var(--accent); }
+
+.r {
+  padding: 1px 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.r:hover { color: var(--text); }
+.r:disabled { visibility: hidden; } /* nothing taught, nothing to reset */
+
+.teach code {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--faint);
+  font: 11px/1.4 var(--mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.teach.taught code { color: var(--accent); }
+
+/* --- Footer: the message line and debug info ------------------------------------------ */
+
+footer {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.status { margin: 0 0 8px; color: var(--accent); font-size: 12px; }
+
+.quiet {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel);
-  color: var(--text);
-  font: inherit;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
 }
 
-.debug { margin-top: 10px; justify-content: flex-start; }
+.quiet:hover:not(:disabled) { border-color: var(--muted); color: var(--text); }
+.quiet:disabled { opacity: .4; }
 
 #debugText {
+  display: block;
   width: 100%;
-  height: 120px;
+  height: 110px;
+  margin-bottom: 8px;
   box-sizing: border-box;
-  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
   color: var(--muted);
-  border: 1px solid var(--border);
-  font: 10px/1.3 ui-monospace, monospace;
+  font: 10px/1.3 var(--mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { transition: none !important; animation: none !important; }
 }

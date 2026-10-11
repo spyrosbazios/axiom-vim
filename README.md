@@ -8,7 +8,7 @@ A Chrome extension (Manifest V3). Unofficial: not made by or affiliated with Axi
 - **Trade page:** `j`/`k` scroll the Holders list, hold `x` for the X preview, `z` zooms the chart out, `Shift+B` blacklists the dev and leaves.
 - **Anywhere:** `Shift+H` / `Shift+L` go back / forward, like Vimium.
 - **Layout-proof:** keys match the physical key, so they work on any keyboard layout (e.g. Greek).
-- **Built-in cheat sheet:** the popup's **Keys** section lists every shortcut.
+- **Remappable:** every shortcut can be moved to any key in the popup's **Keys** section. The keys below are the defaults.
 
 ## Install
 
@@ -51,7 +51,7 @@ git clone https://github.com/spyrosbazios/axiom-vim.git
 1. Click the puzzle-piece icon in the toolbar, then the pin next to **Axiom Vim**. This keeps its popup one click away.
 2. Reload any axiom.trade tabs you already had open. Tabs opened before the install don't get the shortcuts.
 3. Open [Pulse](https://axiom.trade/pulse) and press `j`. A coin in Final Stretch gets a highlighted ring.
-4. Click the extension icon and expand **Keys** to see every shortcut.
+4. Click the extension icon and expand **Keys** to see every shortcut, or change one.
 
 ### Updating
 
@@ -67,11 +67,13 @@ Click **Remove** on the **Axiom Vim** card on the extensions page, then delete t
 ### If the keys do nothing
 
 - **Reload the Axiom tab.** The page needs a reload after installing, updating or turning the extension back on.
-- **Check the switches.** The extension must be on in the extensions page, and **Enabled** must be ticked in its popup.
+- **Check the switches.** The extension must be on in the extensions page, and the block at the top left of its popup must say **NORMAL** (click it if it says **OFF**).
 - **Click on the page first.** Keys go to whatever has focus. If you just clicked the address bar or a text box, click an empty part of the page.
 - **"Pulse columns not found"** means Axiom renamed or moved its columns. Open an issue with the output of **Copy debug info** from the popup.
 
 ## Keys
+
+These are the defaults. Every one can be changed in the popup (see [Changing keys](#changing-keys)).
 
 ### Pulse
 
@@ -117,20 +119,28 @@ Going back lands on Pulse when there's no earlier Axiom page.
 - Shortcuts are ignored while you type in a text field.
 - While Space is held, every key goes to Axiom untouched, so Axiom's own Space+key hotkeys (like quick buy) keep working.
 - Number keys are left to Axiom.
-- The hide key can be rebound in the popup.
-- The popup's **Vim keys** switch turns off `hjkl`, `Enter` and `Esc` on Pulse, `j`/`k` on trade pages, and `Shift+H`/`L`.
+- The popup's **Vim keys** switch turns off moving, open and clear on Pulse, Holders scrolling, and back / forward, whatever keys they're on.
+
+### Changing keys
+
+1. Open the popup and expand **Keys**.
+2. Click the key next to an action, then press the new key or combo (`Shift`, `Ctrl`, `Alt` work). `Esc` cancels.
+3. The **↺** next to a row puts that one back; **Reset all keys** puts them all back.
+
+- If two actions end up on the same key on the same page, both are marked in orange. The one listed first wins.
+- `Space` can't be used: while it's held, keys go to Axiom for its own Space+key hotkeys.
+- Keys are stored by physical position, like the defaults, so they keep working when you switch keyboard layout.
 
 ## Popup
 
 | Setting | What it does |
 | --- | --- |
-| **Enabled** | Turns every shortcut on or off |
+| **NORMAL / OFF** (top left) | Click to turn every shortcut on or off |
 | **Vim keys** | Turns the vim movement keys on or off (see above) |
-| **Hide coin** | Click it, then press a new key combo for hide |
-| **Zoom out per z** | Wheel notches per `z` press, 1–20 |
+| **Zoom out per press** | Wheel notches per zoom-out press, 1–20 |
 | **Teach** rows | Point the extension at the right button when auto-detection misses |
 | **Copy debug info** | Copies the page structure for a bug report |
-| **Keys** | Cheat sheet of every shortcut |
+| **Keys** | Every shortcut; click one to change it |
 
 ## Teach
 
@@ -162,10 +172,10 @@ Teach refuses anything it can't recognize safely:
 
 ```
 manifest.json    extension manifest
-shared.js        defaults and key tables, shared by the page script and the popup
+shared.js        defaults and the list of actions with their default keys, shared by the page script and the popup
 content.js       everything on the page: keys, detection, Teach, debug info
 background.js    opens website links in a new window (page scripts can't)
-popup.*          settings, Teach rows and the Keys cheat sheet
+popup.*          settings, Teach rows and the Keys editor
 test/            headless tests against mock Axiom pages
 ```
 

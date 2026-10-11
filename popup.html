@@ -6,101 +6,72 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>Axiom Vim</h1>
+  <!-- Vim's statusline: the mode block is the on/off switch for every shortcut, the ruler shows the version. -->
+  <header class="statusline">
+    <label class="mode" title="Turns every shortcut on or off">
+      <input type="checkbox" id="enabled">
+      <span class="mode-on">NORMAL</span><span class="mode-off">OFF</span>
+    </label>
+    <span class="name">Axiom Vim</span>
+    <span class="ruler" id="version"></span>
+  </header>
 
-  <label class="row">
-    <span>Enabled</span>
-    <input type="checkbox" id="enabled">
-  </label>
+  <main>
+    <section class="settings">
+      <label class="setting">
+        <span>Vim keys <small>Moving, open, clear, Holders scrolling, back and forward</small></span>
+        <input type="checkbox" id="vimNav" class="switch">
+      </label>
+      <label class="setting">
+        <span>Zoom out per press <small>Chart wheel notches, 1 to 20</small></span>
+        <input type="number" id="zoomSteps" min="1" max="20" step="1">
+      </label>
+    </section>
 
-  <label class="row">
-    <span>Vim keys <span class="muted">hjkl · Enter · Esc · j/k holders · H/L</span></span>
-    <input type="checkbox" id="vimNav">
-  </label>
+    <!-- Filled from AXS_ACTIONS. Rows marked .vim are the ones the "Vim keys" switch turns off; they dim while it's off. -->
+    <details class="fold help" id="help">
+      <summary><span>Keys</span><span class="meta" id="keysMeta"></span></summary>
+      <p class="hint">Click a key, then press the new one. Esc cancels.</p>
+      <div id="keyTables"></div>
+      <div class="fold-foot">
+        <button id="resetKeys" class="quiet">Reset all keys</button>
+        <span class="hint">Keys go by position, so any layout works.</span>
+      </div>
+    </details>
 
-  <div class="row">
-    <span>Hide coin</span>
-    <button id="hideKey" class="key" title="Click, then press the new shortcut">Shift + X</button>
-  </div>
+    <details class="fold" id="teachFold" open>
+      <summary><span>Teach</span><span class="meta" id="teachMeta"></span></summary>
+      <p class="hint">If a button or list isn't found, click Teach, then click it on the page.</p>
+      <div class="teach" data-what="pulseHide" data-key="hideSelector" data-empty="auto-detect">
+        <span class="name">Pulse hide button</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+      <div class="teach" data-what="pairHide" data-key="pairHideSelector" data-empty="not taught (hide is off on trade pages)">
+        <span class="name">Trade hide button</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+      <div class="teach" data-what="blacklist" data-key="blacklistSelector" data-empty="auto-detect (&quot;Blacklist dev&quot; button)">
+        <span class="name">Blacklist dev button</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+      <div class="teach" data-what="tabBar" data-key="tabBarSelector" data-empty="auto-detect">
+        <span class="name">Tab bar</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+      <div class="teach" data-what="holders" data-key="holdersSelector" data-empty="auto-detect">
+        <span class="name">Holders list</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+      <div class="teach" data-what="twitter" data-key="twitterSelector" data-empty="auto-detect">
+        <span class="name">X (Twitter) link</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+      <div class="teach" data-what="website" data-key="websiteSelector" data-empty="auto-detect">
+        <span class="name">Website link</span><span class="btns"><button class="r">Reset</button><button class="t">Teach</button></span><code></code>
+      </div>
+    </details>
+  </main>
 
-  <label class="row">
-    <span>Zoom out per <b>z</b> <span class="muted">(wheel notches)</span></span>
-    <input type="number" id="zoomSteps" min="1" max="20" step="1">
-  </label>
-
-  <div class="section">
-    <div class="muted">Teach: click Teach, then click that thing on the page.</div>
-    <div class="teach" data-what="pulseHide" data-key="hideSelector" data-empty="auto-detect">
-      <div class="row"><span>Pulse hide button</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-    <div class="teach" data-what="pairHide" data-key="pairHideSelector" data-empty="not taught (hide is off on trade pages)">
-      <div class="row"><span>Trade hide button</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-    <div class="teach" data-what="blacklist" data-key="blacklistSelector" data-empty="auto-detect (&quot;Blacklist dev&quot; button)">
-      <div class="row"><span>Blacklist dev button</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-    <div class="teach" data-what="tabBar" data-key="tabBarSelector" data-empty="auto-detect">
-      <div class="row"><span>Tab bar</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-    <div class="teach" data-what="holders" data-key="holdersSelector" data-empty="auto-detect">
-      <div class="row"><span>Holders list</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-    <div class="teach" data-what="twitter" data-key="twitterSelector" data-empty="auto-detect">
-      <div class="row"><span>X (Twitter) link</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-    <div class="teach" data-what="website" data-key="websiteSelector" data-empty="auto-detect">
-      <div class="row"><span>Website link</span><span class="btns"><button class="t">Teach</button><button class="r">Reset</button></span></div>
-      <code></code>
-    </div>
-  </div>
-
-  <div class="row debug">
-    <button id="debug" title="Copies the page structure (no wallet data) so detection can be fixed">Copy debug info</button>
-  </div>
-  <textarea id="debugText" readonly hidden></textarea>
-
-  <p id="status" class="status" hidden></p>
-
-  <!-- Rows marked .vim are the ones the "Vim keys" switch turns off; they dim while it's off. -->
-  <details class="section help" id="help">
-    <summary>Keys</summary>
-
-    <h2>Pulse</h2>
-    <table>
-      <tr class="vim"><td><kbd>j</kbd> <kbd>k</kbd></td><td>Next / previous coin</td></tr>
-      <tr class="vim"><td><kbd>h</kbd> <kbd>l</kbd></td><td>Previous / next column</td></tr>
-      <tr class="vim"><td><kbd>Enter</kbd></td><td>Open the selected coin</td></tr>
-      <tr><td><kbd>w</kbd></td><td>Open its website in a new window</td></tr>
-      <tr><td><kbd>x</kbd></td><td>X preview of the selected coin <span class="muted">(Axiom's own key)</span></td></tr>
-      <tr><td><kbd id="hideHint">Shift + X</kbd></td><td>Hide the selected (or hovered) coin</td></tr>
-      <tr class="vim"><td><kbd>Esc</kbd></td><td>Clear the selection</td></tr>
-    </table>
-
-    <h2>Trade page</h2>
-    <table>
-      <tr class="vim"><td><kbd>j</kbd> <kbd>k</kbd></td><td>Scroll Holders one row</td></tr>
-      <tr><td>hold <kbd>x</kbd></td><td>X preview; release to close</td></tr>
-      <tr><td><kbd>w</kbd></td><td>Open the website in a new window</td></tr>
-      <tr><td><kbd>z</kbd></td><td>Zoom chart out <span class="muted">(hold to keep going)</span></td></tr>
-      <tr><td><kbd>Shift + Z</kbd></td><td>Reset the chart view</td></tr>
-      <tr><td><kbd>Shift + B</kbd></td><td>Blacklist dev, hide, go back</td></tr>
-      <tr><td><kbd id="pairHideHint">Shift + X</kbd></td><td>Hide, go back <span class="muted">(after Teach)</span></td></tr>
-    </table>
-
-    <h2>Anywhere</h2>
-    <table>
-      <tr class="vim"><td><kbd>Shift + H</kbd> <kbd>L</kbd></td><td>Back / forward</td></tr>
-      <tr><td><kbd>Space</kbd> + key</td><td>Left to Axiom <span class="muted">(e.g. quick buy)</span></td></tr>
-    </table>
-
-    <p class="muted">Keys go by position, so any layout works. Ignored while typing.</p>
-  </details>
+  <!-- Like Vim's message line: what just happened, or what to do next. -->
+  <footer>
+    <p id="status" class="status" hidden></p>
+    <textarea id="debugText" readonly hidden></textarea>
+    <button id="debug" class="quiet" title="Copies the page structure (no wallet data) so detection can be fixed">Copy debug info</button>
+  </footer>
 
   <script src="shared.js"></script>
   <script src="popup.js"></script>

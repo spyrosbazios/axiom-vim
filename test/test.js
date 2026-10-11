@@ -393,7 +393,8 @@ const check = (name, ok, extra = '') => {
     section('— popup');
     const popup = await browser.newPage();
     await popup.goto(`chrome-extension://${extId}/popup.html`); await sleep(200);
-    const ui = await popup.evaluate(() => ({ key: hideKey.textContent, vim: vimNav.checked, sel: document.querySelector('[data-what=pulseHide] code').textContent }));
+    const keyLabel = id => popup.$eval(`[data-id=${id}] .key`, b => b.textContent);
+    const ui = await popup.evaluate(() => ({ key: document.querySelector('[data-id=hide] .key').textContent, vim: vimNav.checked, sel: document.querySelector('[data-what=pulseHide] code').textContent }));
     check('popup shows Shift + X, vim on, learned selector', ui.key === 'Shift + X' && ui.vim && ui.sel === learned, JSON.stringify(ui));
     check('popup shows trade-page hide button as not taught', /^not taught/.test(await popup.$eval('[data-what=pairHide] code', c => c.textContent)));
     check('popup shows zoom step 4', (await popup.$eval('#zoomSteps', i => i.value)) === '4');
@@ -402,8 +403,13 @@ const check = (name, ok, extra = '') => {
     check('popup clamps zoom step to 20', (await storeGet('zoomSteps')) === 20, String(await storeGet('zoomSteps')));
     await store({ zoomSteps: 4 });
     check('popup has Teach rows for tab bar, holders, X link and website', (await popup.$$eval('.teach', rows => rows.map(r => r.dataset.what).join())) === 'pulseHide,pairHide,blacklist,tabBar,holders,twitter,website');
-    const kh = await popup.evaluate(() => ({ open: document.getElementById("help").open, hide: hideHint.textContent, pairHide: pairHideHint.textContent, vimDim: document.body.classList.contains('vim-off') }));
-    check('Keys help starts closed and lists the defaults', !kh.open && kh.hide === 'Shift + X' && kh.pairHide === 'Shift + X' && !kh.vimDim, JSON.stringify(kh));
+    const kh = await popup.evaluate(() => ({
+      open: document.getElementById('help').open, vimDim: document.body.classList.contains('vim-off'),
+      keys: Object.fromEntries([...document.querySelectorAll('#keyTables tr[data-id]')].map(r => [r.dataset.id, r.querySelector('.key').textContent])),
+      resetsOff: [...document.querySelectorAll('#keyTables .reset')].every(b => b.disabled), resetAllOff: resetKeys.disabled
+    }));
+    const defaults = { down: 'j', up: 'k', left: 'h', right: 'l', open: 'Enter', clear: 'Esc', hide: 'Shift + X', website: 'w', holdersDown: 'j', holdersUp: 'k', xPreview: 'x', closePreview: 'Esc', zoomOut: 'z', zoomReset: 'Shift + Z', blacklist: 'Shift + B', back: 'Shift + H', forward: 'Shift + L' };
+    check('Keys section starts closed and lists every action with its default key', !kh.open && !kh.vimDim && JSON.stringify(kh.keys) === JSON.stringify(defaults) && kh.resetsOff && kh.resetAllOff, JSON.stringify(kh));
     await popup.click('#help summary'); await store({ vimNav: false }); await sleep(150);
     check('Vim keys off dims the vim rows in the Keys help', await popup.evaluate(() => getComputedStyle(document.querySelector('#help tr.vim')).opacity === '0.4'));
     await store({ vimNav: true });
@@ -413,17 +419,19 @@ const check = (name, ok, extra = '') => {
     await popup.click('[data-what=holders] .t'); await sleep(200); // the active tab is the popup itself: Teach can't start
     check('a Teach error shows in the status line', /Open \(or reload\)/.test(await popup.$eval('#status', s => s.textContent)));
     await store({ twitterSelector: 'a.taught' }); await sleep(150);
-    check('...and the rows still refresh afterwards', (await popup.$eval('[data-what=twitter] code', c => c.textContent)) === 'a.taught' && !!(await popup.$('#hideHint')));
+    check('...and the rows still refresh afterwards', (await popup.$eval('[data-what=twitter] code', c => c.textContent)) === 'a.taught' && (await keyLabel('hide')) === 'Shift + X');
     await store({ twitterSelector: '' });
-    await popup.click('#hideKey');
+    await popup.click('[data-id=hide] .key'); await sleep(100);
+    const recState = await popup.$eval('[data-id=hide]', r => ({ rec: r.classList.contains('recording'), key: r.querySelector('.key').textContent, label: r.cells[1].textContent }));
+    check('clicking a key starts recording (empty keycap with a cursor, label says what to do)', recState.rec && recState.key === '' && /^Press the new key/.test(recState.label), JSON.stringify(recState));
     await popup.click('#zoomSteps', { count: 3 }); await popup.keyboard.type('7'); await sleep(150);
-    const rec = { key: await storeGet('hideKey'), field: await popup.$eval('#zoomSteps', i => i.value), label: await popup.$eval('#hideKey', b => b.textContent) };
-    check('key recorder cancels when you click elsewhere (typing goes to that field)', !rec.key && rec.field === '7' && rec.label === 'Shift + X', JSON.stringify(rec));
-    await popup.click('#hideKey');
+    const rec = { keys: await storeGet('keys'), field: await popup.$eval('#zoomSteps', i => i.value), label: await keyLabel('hide') };
+    check('key recorder cancels when you click elsewhere (typing goes to that field)', !Object.keys(rec.keys || {}).length && rec.field === '7' && rec.label === 'Shift + X', JSON.stringify(rec));
+    await popup.click('[data-id=hide] .key');
     await popup.keyboard.down('Shift'); await popup.keyboard.press('KeyD'); await popup.keyboard.up('Shift');
     await sleep(200);
-    check('rebind to Shift + D', (await popup.$eval('#hideKey', b => b.textContent)) === 'Shift + D', await popup.$eval('#hideKey', b => b.textContent));
-    check('Keys help shows the rebound hide key', (await popup.$eval('#hideHint', k => k.textContent)) === 'Shift + D' && (await popup.$eval('#pairHideHint', k => k.textContent)) === 'Shift + D');
+    check('rebind hide to Shift + D', (await keyLabel('hide')) === 'Shift + D' && (await storeGet('keys')).hide?.code === 'KeyD', await keyLabel('hide'));
+    check('...its reset button and Reset all light up', !(await popup.$eval('[data-id=hide] .reset', b => b.disabled)) && !(await popup.$eval('#resetKeys', b => b.disabled)));
     await store({ zoomSteps: 4 });
     await popup.click('[data-what=pulseHide] .r'); await sleep(150);
     check('Auto button clears learned selector', (await storeGet('hideSelector')) === '');
@@ -434,6 +442,53 @@ const check = (name, ok, extra = '') => {
     await hideKey();
     await page.keyboard.down('Shift'); await page.keyboard.press('KeyD'); await page.keyboard.up('Shift'); await sleep(80);
     check('old Shift+X ignored, Shift+D hides A2', (await hides()).join() === 'hide:A2', JSON.stringify(await log()));
+
+    section('— remapping keys');
+    const record = async (id, press) => {
+      await popup.bringToFront();
+      await popup.click(`[data-id=${id}] .key`);
+      await press();
+      await sleep(200);
+    };
+    await record('down', () => popup.keyboard.press('ArrowDown'));
+    check('rebind "Next coin" to ↓', (await keyLabel('down')) === '↓', await keyLabel('down'));
+    await page.bringToFront();
+    await load(); await neutral();
+    await key('ArrowDown'); await key('ArrowDown');
+    const afterArrows = await selected();
+    await clearLog(); await key('j');
+    check('↓ moves down the column, and j now goes to the page', afterArrows === 'B2' && (await selected()) === 'B2' && (await log()).includes('pagekey:j'), `${afterArrows} → ${await selected()} ${JSON.stringify(await log())}`);
+    await record('website', () => popup.keyboard.press('KeyK'));
+    const clash = await popup.evaluate(() => ({
+      website: document.querySelector('[data-id=website]').classList.contains('conflict'),
+      up: document.querySelector('[data-id=up]').classList.contains('conflict'), status: document.getElementById('status').textContent
+    }));
+    check('a key used twice is flagged on both rows, and the status says which', clash.website && clash.up && /^k is also “Previous coin”/.test(clash.status), JSON.stringify(clash));
+    await popup.click('[data-id=website] .reset'); await sleep(200);
+    check('...its reset button puts it back to w and clears the warning', (await keyLabel('website')) === 'w' && !(await popup.$('#keyTables .conflict')));
+    await record('open', () => popup.keyboard.press('Space'));
+    check('Space can\'t be used (it stays with Axiom)', (await keyLabel('open')) === 'Enter' && /Space is left to Axiom/.test(await popup.$eval('#status', s => s.textContent)), await popup.$eval('#status', s => s.textContent));
+    await record('open', () => popup.keyboard.press('Escape'));
+    check('Esc cancels recording', (await keyLabel('open')) === 'Enter' && !(await storeGet('keys')).open);
+    await record('xPreview', () => popup.keyboard.press('KeyV'));
+    await page.bringToFront();
+    await page.goto('https://axiom.trade/meme/TEST', { waitUntil: 'domcontentloaded' }); await sleep(600);
+    await moveTo(300, 250); // over the chart
+    await clearLog(); await page.keyboard.down('v'); await sleep(300);
+    const heldV = await log();
+    await page.keyboard.up('v'); await sleep(100);
+    check('X preview rebound to v: holding v opens it, letting go closes it', heldV.includes('preview:open:token') && (await log()).includes('preview:close'), JSON.stringify(await log()));
+    await clearLog(); await key('x'); await sleep(300);
+    check('...and x now goes to the page', !(await log()).some(x => x.startsWith('preview:open')) && (await log()).includes('pagekey:x'), JSON.stringify(await log()));
+    await popup.bringToFront();
+    await popup.click('#resetKeys'); await sleep(200);
+    check('Reset all keys puts every key back', JSON.stringify(await storeGet('keys')) === '{}' && (await keyLabel('down')) === 'j' && (await keyLabel('hide')) === 'Shift + X' && await popup.$eval('#resetKeys', b => b.disabled));
+    await store({ hideKey: { code: 'KeyQ', ctrl: false, alt: false, shift: true, meta: false } });
+    await popup.reload(); await sleep(300);
+    const migrated = { keys: await storeGet('keys'), old: await storeGet('hideKey'), label: await keyLabel('hide') };
+    check('a hide key saved by an older version moves into the new key settings', migrated.keys?.hide?.code === 'KeyQ' && migrated.old === undefined && migrated.label === 'Shift + Q', JSON.stringify(migrated));
+    await store({ keys: {} });
+    await page.bringToFront();
 
     section('— open');
     await load(); await clearLog();
@@ -698,7 +753,7 @@ const check = (name, ok, extra = '') => {
     await page.keyboard.up('x'); await sleep(100);
 
     section('— trade page: Shift+X hides and goes back');
-    await store({ hideKey: { code: 'KeyX', ctrl: false, alt: false, shift: true, meta: false } }); // popup test rebound it
+    await store({ keys: {} }); // the remapping tests changed keys
     await load();
     const pulseSearch = await page.evaluate(() => location.search);
     await page.goto('https://axiom.trade/meme/TEST2', { waitUntil: 'domcontentloaded' }); await sleep(600);

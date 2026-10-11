@@ -1,9 +1,9 @@
-// Axiom Vim.
-// Pulse: vim-style navigation (h/j/k/l, Enter opens, w website, the hide key hides), starting on the
+// Axiom Vim. Default keys (every one can be changed in the popup, see AXS_ACTIONS):
+// Pulse: vim-style navigation (h/j/k/l, Enter opens, w website, Shift+X hides), starting on the
 // first Final Stretch coin; the selected coin
 // counts as hovered, so Axiom's own hover shortcuts (x = Twitter preview) act on it.
 // Trade page: j/k scroll Holders, hold x for the X preview, w opens the website,
-// z/Z zoom the chart out/reset; Shift+B blacklists the dev, hides the token and goes back; the hide key
+// z/Z zoom the chart out/reset; Shift+B blacklists the dev, hides the token and goes back; Shift+X
 // hides the token and goes back.
 // Anywhere: Shift+H / Shift+L go back / forward.
 
@@ -34,6 +34,7 @@
 
   // --- Setup --------------------------------------------------------------------------
 
+  axsMigrateKeys().catch(() => {});
   chrome.storage.sync.get(AXS_DEFAULTS, s => { settings = s; });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
@@ -148,81 +149,77 @@
     }
     checkRoute();
     if (!settings.enabled || e.isComposing || isTyping(e) || spaceHeld) return;
-    const plain = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
-    const pulse = onPulse();
-    const pair = onPairPage();
+    const page = onPulse() ? 'pulse' : onPairPage() ? 'pair' : 'other';
+    const keymap = axsKeymap(settings.keys);
+    // A key the action can't use here (e.g. Esc with nothing selected) goes on to the next one, then the page.
+    for (const action of AXS_ACTIONS) {
+      if (!action.pages.includes(page) || (action.vim && !settings.vimNav) || !axsKeyMatches(e, keymap[action.id])) continue;
+      if (RUN[action.id](e)) return consume(e);
+    }
+  }
 
-    if (axsKeyMatches(e, settings.hideKey) && (pulse || pair)) {
-      if (e.repeat) return consume(e); // holding the key must not hide a whole column
-      if (pulse ? hideCurrent() : hidePairAndGoBack()) consume(e);
-      return;
-    }
+  // Moving always uses the key, even at the end of a column.
+  const move = dir => () => {
+    navigate(dir);
+    return true;
+  };
 
-    if ((pulse || pair) && plain && e.code === 'KeyW') {
-      if (e.repeat) return consume(e);
-      if (pulse ? openCoinWebsite() : openWebsite()) consume(e);
-      return;
-    }
-
-    if (pair) {
-      // x: the X preview shows while x is held (see onKeyUp). Esc closes it early.
-      if (plain && e.code === 'KeyX') {
-        if (e.repeat) return consume(e);
-        if (hoverTwitter()) {
-          xHeld = true;
-          consume(e);
-        }
-        return;
-      }
-      if (plain && e.key === 'Escape' && hovered) {
-        consume(e);
-        releaseX();
-        unhover();
-        return;
-      }
-      if (e.code === 'KeyB' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        if (e.repeat) return consume(e);
-        if (blacklistHideAndGoBack()) consume(e);
-        return;
-      }
-      if (e.code === 'KeyZ' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        if (e.repeat && e.shiftKey) return consume(e); // holding z keeps zooming; holding Z resets once
-        if (zoomChart(e.shiftKey)) consume(e);
-        return;
-      }
-    }
-
-    // Vim keys (the popup's "Vim keys" switch)
-    if (!settings.vimNav || e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.shiftKey) {
-      const step = AXS_HISTORY_KEYS[e.code];
-      if (step) {
-        consume(e);
-        if (!e.repeat) history[step]();
-      }
-      return;
-    }
-    if (pair) {
-      const dir = { KeyJ: 1, KeyK: -1 }[e.code];
-      if (dir && scrollHolders(dir)) consume(e);
-      return;
-    }
-    if (!pulse) return;
-    if (e.key === 'Escape' && cursor) {
-      consume(e);
-      clearCursor();
-    } else if (e.key === 'Enter' && cursor) {
-      consume(e);
+  // What each action does (ids as in AXS_ACTIONS). Returns true if it used the key, so the page doesn't
+  // get it too. Holding a key repeats moving, scrolling and zooming out; the others ignore the repeats.
+  const RUN = {
+    down: move('down'),
+    up: move('up'),
+    left: move('left'),
+    right: move('right'),
+    open: e => {
+      if (!cursor) return false;
       if (!e.repeat) openCurrent();
-    } else if (AXS_NAV_KEYS[e.code]) {
-      consume(e);
-      navigate(AXS_NAV_KEYS[e.code]);
+      return true;
+    },
+    clear: () => {
+      if (!cursor) return false;
+      clearCursor();
+      return true;
+    },
+    hide: e => e.repeat || (onPulse() ? hideCurrent() : hidePairAndGoBack()), // holding it must not hide a whole column
+    website: e => e.repeat || (onPulse() ? openCoinWebsite() : openWebsite()),
+    holdersDown: () => scrollHolders(1),
+    holdersUp: () => scrollHolders(-1),
+    // The X preview shows while the key is held (see onKeyUp).
+    xPreview: e => {
+      if (e.repeat) return true;
+      if (!hoverTwitter()) return false;
+      xHeld = true;
+      return true;
+    },
+    closePreview: () => {
+      if (!hovered) return false;
+      releaseX();
+      unhover();
+      return true;
+    },
+    zoomOut: () => zoomChart(false),
+    zoomReset: e => e.repeat || zoomChart(true),
+    blacklist: e => e.repeat || blacklistHideAndGoBack(),
+    back: e => {
+      if (!e.repeat) history.back();
+      return true;
+    },
+    forward: e => {
+      if (!e.repeat) history.forward();
+      return true;
     }
+  };
+
+  // The current key of an action, for messages.
+  function keyName(id) {
+    return axsKeyLabel(axsKeymap(settings.keys)[id]);
   }
 
   function onKeyUp(e) {
     if (e.isTrusted && e.code === 'Space') spaceHeld = false;
-    if (e.isTrusted && e.code === 'KeyX' && xHeld) {
+    // Modifiers don't matter here: they may be let go first.
+    if (e.isTrusted && xHeld && e.code === axsKeymap(settings.keys).xPreview.code) {
       consume(e);
       releaseX();
     }
@@ -1082,7 +1079,7 @@
     });
     if (!sel) return "Couldn't single out the hide icon (it must be one per coin), so nothing was learned.";
     chrome.storage.sync.set({ hideSelector: sel });
-    return `Learned ✓ ${queryAll(sel).length} hide buttons on page. Select or hover a coin and press ${axsKeyLabel(settings.hideKey)}.`;
+    return `Learned ✓ ${queryAll(sel).length} hide buttons on page. Select or hover a coin and press ${keyName('hide')}.`;
   }
 
   function learnPairHide(target) {
@@ -1090,7 +1087,7 @@
     const sel = uniqueSelector(selectorCandidates(target), target.closest('button, [role="button"]') || target);
     if (!sel) return 'Could not recognize that button uniquely on this page, so nothing was learned.';
     chrome.storage.sync.set({ pairHideSelector: sel });
-    return `Learned ✓ trade-page hide button. Press ${axsKeyLabel(settings.hideKey)} here to hide the token and go back.`;
+    return `Learned ✓ trade-page hide button. Press ${keyName('hide')} here to hide the token and go back.`;
   }
 
   function learnBlacklist(target) {
@@ -1098,7 +1095,7 @@
     const sel = uniqueSelector([...selectorCandidates(target), ...elementSelectors(clickable)], clickable);
     if (!sel) return 'Could not recognize that button uniquely on this page, so nothing was learned.';
     chrome.storage.sync.set({ blacklistSelector: sel });
-    return 'Learned ✓ Blacklist dev button. Shift + B blacklists, hides the token and goes back.';
+    return `Learned ✓ Blacklist dev button. ${keyName('blacklist')} blacklists, hides the token and goes back.`;
   }
 
   function learnTabBar(target) {
@@ -1117,7 +1114,7 @@
     if (!sel) return 'Could not recognize the tab bar uniquely on this page, so nothing was learned.';
     chrome.storage.sync.set({ tabBarSelector: sel });
     forgetHolders();
-    return 'Learned ✓ tab bar. j / k scroll Holders.';
+    return `Learned ✓ tab bar. ${keyName('holdersDown')} / ${keyName('holdersUp')} scroll Holders.`;
   }
 
   function learnHolders(target) {
@@ -1128,7 +1125,7 @@
     if (!sel) return 'Could not recognize that list uniquely on this page, so nothing was learned.';
     chrome.storage.sync.set({ holdersSelector: sel });
     forgetHolders();
-    return 'Learned ✓ Holders list. j / k scroll it.';
+    return `Learned ✓ Holders list. ${keyName('holdersDown')} / ${keyName('holdersUp')} scroll it.`;
   }
 
   function learnTwitter(target) {
@@ -1139,7 +1136,7 @@
     const sel = uniqueSelector([`${classSelector(link)}[href*="${host}"]`, ...elementSelectors(link), ...selectorCandidates(target)], link);
     if (!sel) return 'Could not recognize that link uniquely on this page, so nothing was learned.';
     chrome.storage.sync.set({ twitterSelector: sel });
-    return 'Learned ✓ X link. Press x for its preview.';
+    return `Learned ✓ X link. Hold ${keyName('xPreview')} for its preview.`;
   }
 
   function learnWebsite(target) {
@@ -1148,7 +1145,7 @@
     const sel = uniqueSelector([...elementSelectors(link), ...selectorCandidates(target)], link);
     if (!sel) return 'Could not recognize that link uniquely on this page, so nothing was learned.';
     chrome.storage.sync.set({ websiteSelector: sel });
-    return 'Learned ✓ website link. Press w to open it.';
+    return `Learned ✓ website link. Press ${keyName('website')} to open it.`;
   }
 
   // The first candidate that matches exactly one thing on the page, and that thing is `el` (or is inside it / wraps it).
